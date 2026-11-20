@@ -1,0 +1,222 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>OpenGuard 开源卫士 — 供应链安全与合规审计工作台</title>
+  <link rel="stylesheet" href="/static/styles.css" />
+</head>
+<body>
+  <div class="app-shell">
+    <aside class="sidebar">
+      <div class="logo-box">
+        <div class="logo-icon">OG</div>
+        <div>
+          <div class="logo-title">OpenGuard</div>
+          <div class="logo-sub">开源供应链审计平台</div>
+        </div>
+      </div>
+
+      <nav class="nav-list">
+        <button class="nav-btn active" data-view="dashboard">扫描与总览控制台</button>
+        <button class="nav-btn" data-view="playground">实时代码检测台</button>
+        <button class="nav-btn" data-view="sbom">SBOM 与依赖图谱</button>
+        <button class="nav-btn" data-view="autofix">一键修复中心</button>
+        <button class="nav-btn" data-view="history">审计历史与对比</button>
+      </nav>
+
+      <div class="sidebar-footer">
+        <div id="health-pill" class="health-pill">后端连接中...</div>
+        <div class="tiny-note">Offline-First · Zero CDN</div>
+      </div>
+    </aside>
+
+    <main class="main-content">
+      <!-- View 1: Scanner & Dashboard -->
+      <section id="view-dashboard" class="view active">
+        <header class="page-head">
+          <div>
+            <h1>供应链安全与开源合规扫描控制台</h1>
+            <p class="muted">支持本地仓库、单文件或远程 Git URL，一次扫描覆盖密钥防泄、Git 历史回溯、SBOM 许可证冲突、CVE 与工程治理。</p>
+          </div>
+          <div id="export-bar" class="export-bar hidden">
+            <a id="exp-html" class="btn-outline" target="_blank">HTML 报告</a>
+            <a id="exp-pdf" class="btn-outline" target="_blank">PDF 报告</a>
+            <a id="exp-sarif" class="btn-outline" target="_blank">SARIF</a>
+            <a id="exp-cdx" class="btn-outline" target="_blank">CycloneDX</a>
+            <a id="exp-md" class="btn-outline" target="_blank">Markdown</a>
+            <a id="exp-badge" class="btn-outline" target="_blank">SVG 徽章</a>
+          </div>
+        </header>
+
+        <div class="panel scan-box">
+          <div class="scan-row">
+            <input id="scan-target" type="text" class="input-main" placeholder="输入本地项目路径（如 E:\path\to\repo）或远程 Git URL..." />
+            <button id="btn-run-scan" class="btn-primary">开始深度审计</button>
+          </div>
+          <div class="scan-options">
+            <label class="chk"><input type="checkbox" id="opt-git-history" /> 回溯 Git 历史幽灵密钥</label>
+            <label class="chk"><input type="checkbox" id="opt-offline" checked /> 离线高速模式（跳过外网 OSV API）</label>
+            <input id="opt-license" type="text" class="input-sm" placeholder="覆盖主许可证 (可选，如 MIT)" />
+          </div>
+          <div id="preset-list" class="preset-list"></div>
+        </div>
+
+        <div id="scan-status" class="status-banner hidden"></div>
+
+        <div id="dashboard-results" class="hidden">
+          <div class="top-cards">
+            <div class="panel score-panel">
+              <div class="panel-title">综合健康度评分</div>
+              <div class="score-inner">
+                <div id="gauge-container"></div>
+                <div class="kpi-grid">
+                  <div class="kpi"><div id="kpi-crit" class="kpi-val red">0</div><div class="kpi-lbl">CRITICAL</div></div>
+                  <div class="kpi"><div id="kpi-high" class="kpi-val orange">0</div><div class="kpi-lbl">HIGH</div></div>
+                  <div class="kpi"><div id="kpi-comps" class="kpi-val blue">0</div><div class="kpi-lbl">SBOM 组件</div></div>
+                  <div class="kpi"><div id="kpi-supp" class="kpi-val green">0</div><div class="kpi-lbl">AST 过滤误报</div></div>
+                </div>
+              </div>
+              <div id="scan-meta-line" class="meta-footnote"></div>
+            </div>
+
+            <div class="panel radar-panel">
+              <div class="panel-title">五维合规雷达图</div>
+              <div id="radar-container" class="center-box"></div>
+            </div>
+          </div>
+
+          <div class="panel">
+            <div class="panel-title">维度明细与优先整改路线图</div>
+            <div id="dimensions-table-wrap"></div>
+            <div id="roadmap-wrap" class="roadmap-wrap"></div>
+          </div>
+
+          <div class="panel">
+            <div class="panel-title">风险发现溯源清单</div>
+            <div class="filter-bar">
+              <button class="tab-btn active" data-kind="all">全部</button>
+              <button class="tab-btn" data-kind="secret">工作区密钥</button>
+              <button class="tab-btn" data-kind="history">Git 历史密钥</button>
+              <button class="tab-btn" data-kind="license">许可证冲突</button>
+              <button class="tab-btn" data-kind="vuln">漏洞与投毒</button>
+              <button class="tab-btn" data-kind="sast">SAST 代码缺陷</button>
+              <input id="finding-search" type="search" class="input-sm search-right" placeholder="筛选文件/规则/CVE..." />
+            </div>
+            <div id="findings-container"></div>
+          </div>
+
+          <div class="panel">
+            <div class="panel-title">开源工程规范治理体检 (12 项)</div>
+            <div id="governance-container"></div>
+          </div>
+        </div>
+      </section>
+
+      <!-- View 2: Live Snippet Playground -->
+      <section id="view-playground" class="view">
+        <header class="page-head">
+          <div>
+            <h1>实时代码安全检测台 (AST + Entropy + SAST)</h1>
+            <p class="muted">粘贴任意代码片段，实时体验 OpenGuard 如何命中真实密钥与 SAST 危险调用，同时智能过滤占位符、注释与正则定义。</p>
+          </div>
+          <button id="btn-load-sample" class="btn-outline">加载高拟真演示代码</button>
+        </header>
+
+        <div class="panel">
+          <div class="scan-row" style="margin-bottom: 12px;">
+            <select id="snippet-filename" class="input-sm">
+              <option value="service.py">Python (service.py)</option>
+              <option value="config.js">JavaScript (config.js)</option>
+              <option value="settings.yml">YAML (settings.yml)</option>
+              <option value=".env">Env (.env)</option>
+            </select>
+            <button id="btn-run-snippet" class="btn-primary">立即实时检测</button>
+          </div>
+          <textarea id="snippet-code" class="code-editor" rows="12" placeholder="在此输入或粘贴源码..."></textarea>
+        </div>
+
+        <div id="snippet-results" class="panel hidden">
+          <div class="panel-title">实时检测与降噪归因结果</div>
+          <div id="snippet-findings"></div>
+        </div>
+      </section>
+
+      <!-- View 3: SBOM & Dependency Graph -->
+      <section id="view-sbom" class="view">
+        <header class="page-head">
+          <div>
+            <h1>SBOM 软件物料清单与依赖许可证传播图谱</h1>
+            <p class="muted">展示多生态依赖拓扑关系、SPDX 许可证识别状态以及强传染性 GPL/AGPL 传播链。</p>
+          </div>
+        </header>
+        <div class="panel">
+          <div class="panel-title">依赖关系拓扑图 (SVG DAG)</div>
+          <div id="dep-graph-container" class="graph-box">请先在「扫描控制台」运行一次项目审计。</div>
+        </div>
+        <div class="panel">
+          <div class="panel-title">完整 SBOM 组件列表</div>
+          <div id="sbom-table-container"></div>
+        </div>
+      </section>
+
+      <!-- View 4: AutoFix Studio -->
+      <section id="view-autofix" class="view">
+        <header class="page-head">
+          <div>
+            <h1>一键脱敏重构与开源文档生成中心</h1>
+            <p class="muted">自动将源码硬编码密钥提取为 `.env.example` + 环境变量调用，并补齐缺失的开源许可证与治理文档。</p>
+          </div>
+        </header>
+
+        <div class="panel">
+          <div class="scan-row">
+            <input id="autofix-target" type="text" class="input-main" placeholder="输入需要自动修复的目标仓库目录..." />
+            <button id="btn-autofix-preview" class="btn-outline">预览重构 Diff</button>
+            <button id="btn-autofix-apply" class="btn-danger">确认应用写入 (含备份)</button>
+          </div>
+          <div class="scan-options">
+            <label class="chk"><input type="checkbox" id="fix-secrets" checked /> 脱敏硬编码密钥为环境变量</label>
+            <label class="chk"><input type="checkbox" id="fix-docs" checked /> 补齐缺失开源文档 (CONTRIBUTING/SECURITY/CHANGELOG/.gitignore)</label>
+            <select id="fix-license" class="input-sm">
+              <option value="MIT">MIT License</option>
+              <option value="Apache-2.0">Apache-2.0</option>
+              <option value="MulanPSL-2.0">MulanPSL-2.0 (木兰宽松)</option>
+            </select>
+          </div>
+        </div>
+        <div id="autofix-output" class="panel hidden"></div>
+      </section>
+
+      <!-- View 5: History & Diff -->
+      <section id="view-history" class="view">
+        <header class="page-head">
+          <div>
+            <h1>审计历史记录与整改前后对比 (Before vs After Diff)</h1>
+            <p class="muted">对比修复前后的两次扫描快照，直观量化风险消除数量与评分提升幅度。</p>
+          </div>
+          <button id="btn-refresh-history" class="btn-outline">刷新历史记录</button>
+        </header>
+
+        <div class="panel">
+          <div class="panel-title">双版本整改效果对比</div>
+          <div class="scan-row">
+            <select id="diff-before" class="input-sm" style="flex:1;"></select>
+            <span class="muted">对比 →</span>
+            <select id="diff-after" class="input-sm" style="flex:1;"></select>
+            <button id="btn-run-diff" class="btn-primary">生成对比分析</button>
+          </div>
+          <div id="diff-result-box" class="hidden" style="margin-top: 16px;"></div>
+        </div>
+
+        <div class="panel">
+          <div class="panel-title">历史扫描任务台账</div>
+          <div id="history-table-box"></div>
+        </div>
+      </section>
+    </main>
+  </div>
+
+  <script src="/static/app.js"></script>
+</body>
+</html>
