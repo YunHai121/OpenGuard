@@ -327,6 +327,7 @@ class SecretScanner:
                         ast_context=ctx.summary_label,
                         filter_notes=notes,
                         remediation=rule.remediation,
+                        runbook_steps=self._build_runbook_steps(rule, file_path, is_historical_only),
                         cwe_id=rule.cwe_id,
                         commit_hash=commit_hash,
                         commit_author=commit_author,
@@ -456,6 +457,33 @@ class SecretScanner:
             return False, confidence, ent, notes
 
         return True, confidence, ent, notes
+
+    @staticmethod
+    def _build_runbook_steps(rule: SecretRule, file_path: str, is_historical: bool) -> List[str]:
+        """Generate a 3-step provider-specific incident response runbook."""
+        tag_steps = {
+            "cloud": "1. 立即登录对应云厂商控制台（AWS IAM / 阿里云 RAM / 腾讯云 CAM / GCP）吊销泄露密钥并核查近期调用审计日志。",
+            "ai": "1. 立即前往大模型平台控制台（OpenAI / Anthropic / DashScope / HuggingFace）撤销泄露 API Key 并核查异常额度消耗。",
+            "scm": "1. 立即在代码托管或包仓库设置（GitHub / GitLab / Gitee / PyPI / npm）吊销该 Token，检查近期异常推送或发布。",
+            "webhook": "1. 立即在群聊机器人设置（飞书 / 钉钉 / 企业微信 / Slack）重置 Webhook URL 并开启加签/关键词校验。",
+            "private_key": "1. 立即吊销对应公钥证书与服务器 authorized_keys 授权，重新生成高强度 Ed25519/RSA 密钥对。",
+            "database": "1. 立即修改数据库/中间件口令，核查异常登录 IP，确保数据库端口不直接暴露公网。",
+            "pii": "1. 立即清除源码与测试样本中的真实公民个人敏感信息，改用合规合成假数据替代。",
+        }
+        step1 = tag_steps.get(
+            rule.category_tag,
+            f"1. 立即轮换或吊销 `{rule.name}` 对应的泄露凭据，防止被未授权利用。",
+        )
+        if is_historical:
+            step2 = (
+                f"2. 使用 `git filter-repo --path {file_path} --invert-paths` 清理 Git 历史提交中的残留记录并强制推送。"
+            )
+        else:
+            step2 = (
+                f"2. 运行 `openguard autofix . --secrets --apply` 自动将 `{file_path}` 中的硬编码替换为环境变量并生成 `.env.example`。"
+            )
+        step3 = "3. 运行 `openguard hook install .` 启用提交前拦截防线，避免同类凭据再次进入仓库。"
+        return [step1, step2, step3]
 
     # --- Baseline reference scanners used by Benchmarks to quantify AST+Entropy improvement ---
 

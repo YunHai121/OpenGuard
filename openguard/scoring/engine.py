@@ -10,9 +10,12 @@ from openguard.models import (
     AuditSummary,
     CodeSecurityFinding,
     DimensionScore,
+    FindingCategory,
     GovernanceCheckItem,
     LicenseCompatibility,
     LicenseConflict,
+    QualityGate,
+    QualityGateCondition,
     SecretFinding,
     Severity,
     VulnerabilityFinding,
@@ -171,6 +174,9 @@ class ScoringEngine:
         roadmap = self._build_roadmap(
             secrets, git_history_secrets, vulnerabilities, license_conflicts, code_security_findings, governance_checks
         )
+        quality_gate = self._evaluate_quality_gate(
+            secrets, git_history_secrets, vulnerabilities, license_conflicts
+        )
 
         return AuditSummary(
             total_score=total_score,
@@ -181,7 +187,71 @@ class ScoringEngine:
             lines_scanned=lines_scanned,
             scan_duration_ms=round(scan_duration_ms, 2),
             roadmap=roadmap,
+            quality_gate=quality_gate,
         )
+
+    @staticmethod
+    def _evaluate_quality_gate(
+        secrets: List[SecretFinding],
+        git_history_secrets: List[SecretFinding],
+        vulnerabilities: List[VulnerabilityFinding],
+        license_conflicts: List[LicenseConflict],
+    ) -> QualityGate:
+        reachable_high = sum(
+            1
+            for v in vulnerabilities
+            if str(v.category) == FindingCategory.VULNERABILITY.value
+            and (v.reachable is not False)
+            and str(v.severity) in (Severity.CRITICAL.value, Severity.HIGH.value)
+        )
+        incompat_lic = sum(
+            1 for c in license_conflicts if str(c.compatibility) == LicenseCompatibility.INCOMPATIBLE.value
+        )
+        supply_attacks = sum(
+            1
+            for v in vulnerabilities
+            if str(v.category) in (FindingCategory.TYPOSQUATTING.value, FindingCategory.SUPPLY_CHAIN_SCRIPT.value)
+        )
+
+        conditions = [
+            QualityGateCondition(
+                metric="workspace_secrets",
+                label="工作区零明文密钥",
+                actual=len(secrets),
+                threshold="= 0",
+                passed=len(secrets) == 0,
+            ),
+            QualityGateCondition(
+                metric="git_history_secrets",
+                label="Git 历史零残留密钥",
+                actual=len(git_history_secrets),
+                threshold="= 0",
+                passed=len(git_history_secrets) == 0,
+            ),
+            QualityGateCondition(
+                metric="reachable_high_cves",
+                label="零可达高危/严重 CVE",
+                actual=reachable_high,
+                threshold="= 0",
+                passed=reachable_high == 0,
+            ),
+            QualityGateCondition(
+                metric="incompatible_licenses",
+                label="零强传染许可证冲突",
+                actual=incompat_lic,
+                threshold="= 0",
+                passed=incompat_lic == 0,
+            ),
+            QualityGateCondition(
+                metric="supply_chain_scripts",
+                label="零投毒脚本/仿冒依赖",
+                actual=supply_attacks,
+                threshold="= 0",
+                passed=supply_attacks == 0,
+            ),
+        ]
+        status = "PASSED" if all(c.passed for c in conditions) else "FAILED"
+        return QualityGate(status=status, conditions=conditions)
 
     @staticmethod
     def _build_roadmap(

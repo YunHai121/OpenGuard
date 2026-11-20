@@ -1,187 +1,143 @@
-"""Self-contained interactive single-file HTML audit report generator (offline, zero CDN)."""
+"""Self-contained interactive single-file HTML audit report (Editorial Light-First Design, Zero CDN)."""
 
 from __future__ import annotations
 
 import html
 import json
-import math
 from typing import List
 
 from openguard.models import AuditReport
 
 
-def _build_radar_svg(report: AuditReport) -> str:
-    """Compute a pure SVG 5-axis radar chart for the 5 audit dimensions."""
-    dims = report.summary.dimensions
-    cx, cy, r = 190.0, 125.0, 82.0
-    n = len(dims) or 5
-    short_labels = ["密钥安全", "供应链漏洞", "许可证合规", "代码安全", "工程治理"]
-
-    grid_rings = []
-    for ratio in (0.25, 0.5, 0.75, 1.0):
-        pts = []
-        for i in range(n):
-            ang = -math.pi / 2 + (2 * math.pi * i) / n
-            pts.append(f"{cx + r * ratio * math.cos(ang):.1f},{cy + r * ratio * math.sin(ang):.1f}")
-        grid_rings.append(f'<polygon points="{" ".join(pts)}" fill="none" stroke="var(--border)" stroke-width="1"/>')
-
-    axes = []
-    labels = []
-    data_pts = []
-    dots = []
-    for i, dim in enumerate(dims):
-        ang = -math.pi / 2 + (2 * math.pi * i) / n
-        ax_x = cx + r * math.cos(ang)
-        ax_y = cy + r * math.sin(ang)
-        axes.append(f'<line x1="{cx}" y1="{cy}" x2="{ax_x:.1f}" y2="{ax_y:.1f}" stroke="var(--border)" stroke-width="1"/>')
-
-        val_ratio = max(0.05, min(1.0, dim.score / 100.0))
-        px = cx + r * val_ratio * math.cos(ang)
-        py = cy + r * val_ratio * math.sin(ang)
-        data_pts.append(f"{px:.1f},{py:.1f}")
-        dots.append(f'<circle cx="{px:.1f}" cy="{py:.1f}" r="4" fill="#6366f1" stroke="#fff" stroke-width="1.5"/>')
-
-        lx = cx + (r + 18) * math.cos(ang)
-        ly = cy + (r + 18) * math.sin(ang) + 4
-        anchor = "middle"
-        if math.cos(ang) > 0.25:
-            anchor = "start"
-        elif math.cos(ang) < -0.25:
-            anchor = "end"
-        lbl = short_labels[i] if i < len(short_labels) else dim.name
-        labels.append(
-            f'<text x="{lx:.1f}" y="{ly:.1f}" text-anchor="{anchor}" font-size="11.5" fill="var(--text-muted)" font-weight="600">'
-            f'{html.escape(lbl)} ({dim.score:.0f})</text>'
+def _build_dim_bars_html(report: AuditReport) -> str:
+    rows: List[str] = []
+    for d in report.summary.dimensions:
+        color = "#16a34a" if d.score >= 85 else ("#d97706" if d.score >= 60 else "#dc2626")
+        rows.append(
+            f'<div class="dim-item">'
+            f'<div class="dim-head"><span><strong>{html.escape(d.name)}</strong> '
+            f'<span class="muted">({int(d.weight * 100)}%)</span></span>'
+            f'<span class="mono"><strong>{d.score:.1f}</strong> · {d.issue_count} 项</span></div>'
+            f'<div class="dim-track"><div class="dim-fill" style="width:{max(2.0, d.score):.1f}%;background:{color};"></div></div>'
+            f'<div class="muted-xs">{html.escape(d.summary)}</div>'
+            f'</div>'
         )
-
-    return f"""<svg viewBox="0 0 380 250" width="380" height="250" style="max-width:100%;height:auto;" aria-label="五维安全评分雷达图">
-  {"".join(grid_rings)}
-  {"".join(axes)}
-  <polygon points="{" ".join(data_pts)}" fill="rgba(99,102,241,0.25)" stroke="#6366f1" stroke-width="2.2"/>
-  {"".join(dots)}
-  {"".join(labels)}
-</svg>"""
-
-
-def _build_gauge_svg(score: float, grade: str) -> str:
-    radius = 58
-    circumference = 2 * math.pi * radius
-    offset = circumference * (1 - max(0.0, min(100.0, score)) / 100.0)
-    color = "#10b981" if score >= 90 else ("#3b82f6" if score >= 80 else ("#f59e0b" if score >= 70 else "#ef4444"))
-    return f"""<svg viewBox="0 0 150 150" width="146" height="146">
-  <circle cx="75" cy="75" r="{radius}" fill="none" stroke="var(--border)" stroke-width="12"/>
-  <circle cx="75" cy="75" r="{radius}" fill="none" stroke="{color}" stroke-width="12"
-          stroke-dasharray="{circumference:.1f}" stroke-dashoffset="{offset:.1f}"
-          stroke-linecap="round" transform="rotate(-90 75 75)"/>
-  <text x="75" y="70" text-anchor="middle" font-size="28" font-weight="800" fill="var(--text)">{score:.1f}</text>
-  <text x="75" y="94" text-anchor="middle" font-size="14" font-weight="700" fill="{color}">等级 {html.escape(grade)}</text>
-</svg>"""
+    return "\n".join(rows)
 
 
 def render_html_report(report: AuditReport) -> str:
-    """Render an interactive, self-contained HTML security & compliance dashboard report."""
+    """Render a clean, self-contained HTML security & compliance audit report."""
     s = report.summary
-    gauge_svg = _build_gauge_svg(s.total_score, s.grade)
-    radar_svg = _build_radar_svg(report)
+    qg = s.quality_gate
+    is_pass = qg.status == "PASSED" if qg else (s.total_score >= 80)
 
     def esc(val: object) -> str:
         return html.escape(str(val or ""))
 
     def sev_badge(sev: str) -> str:
         sv = str(sev).upper()
-        cls = sv.lower()
-        return f'<span class="badge sev-{cls}">{esc(sv)}</span>'
+        return f'<span class="badge sev-{sv.lower()}">{esc(sv)}</span>'
 
-    # Unified table rows for interactive filtering
+    conds_html = "".join(
+        f'<div class="qg-cond {"pass" if c.passed else "fail"}">'
+        f'<span>{esc(c.label)}</span>'
+        f'<strong class="mono">{c.actual} <span class="muted">({esc(c.threshold)})</span></strong>'
+        f'</div>'
+        for c in (qg.conditions if qg else [])
+    )
+
     finding_cards: List[str] = []
     for f in [*report.secrets, *report.git_history_secrets]:
         kind = "history" if f.is_historical_only else "secret"
-        tag = "Git历史残留" if f.is_historical_only else "明文密钥/敏感信息"
-        meta = f"Commit {f.commit_hash} ({f.commit_author}, {f.commit_date})" if f.is_historical_only else f"置信度 {f.confidence:.2f} | 熵值 {f.entropy:.2f} | AST上下文: {f.ast_context}"
+        tag = f"GHOST {f.commit_hash}" if f.is_historical_only else "明文凭据"
+        meta = (
+            f"作者 {f.commit_author} ({f.commit_date})"
+            if f.is_historical_only
+            else f"置信度 {f.confidence:.2f} · Shannon 熵 {f.entropy:.2f} · AST: {f.ast_context}"
+        )
+        runbook = "".join(f"<li>{esc(step)}</li>" for step in (f.runbook_steps or [f.remediation]))
         finding_cards.append(
-            f'<div class="finding-card" data-kind="{kind}" data-sev="{esc(f.severity)}">'
+            f'<div class="finding-card" data-kind="{kind}">'
             f'<div class="finding-head">{sev_badge(str(f.severity))}'
-            f'<span class="kind-pill">{tag}</span>'
+            f'<span class="kind-pill">{esc(tag)}</span>'
             f'<strong>{esc(f.rule_name)}</strong>'
             f'<code class="loc">{esc(f.file_path)}:{f.line_number}</code></div>'
-            f'<div class="finding-body">'
-            f'<div>脱敏值：<code>{esc(f.matched_masked)}</code> &nbsp;|&nbsp; <span class="muted">{esc(meta)}</span></div>'
+            f'<div class="muted-xs" style="margin-bottom:6px;">脱敏凭据：<code>{esc(f.matched_masked)}</code> · {esc(meta)}</div>'
             f'<pre class="code-snip">{esc(f.snippet)}</pre>'
-            f'<div class="fix-tip">建议：{esc(f.remediation)}</div>'
-            f'</div></div>'
+            f'<ul class="runbook-ul">{runbook}</ul>'
+            f'</div>'
         )
 
     for lc in report.license_conflicts:
         chain = " -> ".join(lc.dependency_path)
         finding_cards.append(
-            f'<div class="finding-card" data-kind="license" data-sev="{esc(lc.severity)}">'
+            f'<div class="finding-card" data-kind="license">'
             f'<div class="finding-head">{sev_badge(str(lc.severity))}'
-            f'<span class="kind-pill">许可证冲突</span>'
+            f'<span class="kind-pill">{esc(lc.compatibility)}</span>'
             f'<strong>{esc(lc.component_name)} ({esc(lc.component_license)} vs {esc(lc.project_license)})</strong>'
-            f'<code class="loc">{esc(lc.compatibility)}</code></div>'
-            f'<div class="finding-body">'
-            f'<div>依赖传播路径：<code>{esc(chain)}</code></div>'
-            f'<div style="margin-top:6px;">{esc(lc.explanation)}</div>'
+            f'<code class="loc">{esc(chain)}</code></div>'
+            f'<div style="font-size:13px;">{esc(lc.explanation)}</div>'
             f'<div class="fix-tip">建议：{esc(lc.remediation)}</div>'
-            f'</div></div>'
+            f'</div>'
         )
 
     for v in report.vulnerabilities:
+        reach_pill = (
+            "INSTALL SCRIPT"
+            if v.source == "install_script"
+            else ("TYPOSQUAT" if v.source == "typosquatting" else ("REACHABLE" if v.reachable is True else ("UNREACHABLE" if v.reachable is False else f"CVSS {v.cvss_score}")))
+        )
+        locs = f" · 调用点: {', '.join(v.import_locations)}" if v.import_locations else ""
         finding_cards.append(
-            f'<div class="finding-card" data-kind="vuln" data-sev="{esc(v.severity)}">'
+            f'<div class="finding-card" data-kind="vuln">'
             f'<div class="finding-head">{sev_badge(str(v.severity))}'
-            f'<span class="kind-pill">{"仿冒包告警" if v.source == "typosquatting" else "供应链 CVE"}</span>'
+            f'<span class="kind-pill">{esc(reach_pill)}</span>'
             f'<strong>{esc(v.id)} · {esc(v.component_name)}@{esc(v.component_version)}</strong>'
-            f'<code class="loc">{esc(v.ecosystem)} · CVSS {v.cvss_score}</code></div>'
-            f'<div class="finding-body">'
-            f'<div>{esc(v.summary)}</div>'
-            f'<div class="fix-tip">建议版本：<code>{esc(v.fixed_version)}</code> — {esc(v.remediation)}</div>'
-            f'</div></div>'
+            f'<code class="loc">{esc(v.ecosystem)} · 安全版本 {esc(v.fixed_version)}</code></div>'
+            f'<div style="font-size:13px;">{esc(v.summary)}<span class="muted-xs">{esc(locs)}</span></div>'
+            f'<div class="fix-tip">建议：{esc(v.remediation)}</div>'
+            f'</div>'
         )
 
     for cs in report.code_security_findings:
         finding_cards.append(
-            f'<div class="finding-card" data-kind="sast" data-sev="{esc(cs.severity)}">'
+            f'<div class="finding-card" data-kind="sast">'
             f'<div class="finding-head">{sev_badge(str(cs.severity))}'
             f'<span class="kind-pill">SAST · {esc(cs.cwe_id)}</span>'
             f'<strong>{esc(cs.rule_name)}</strong>'
             f'<code class="loc">{esc(cs.file_path)}:{cs.line_number}</code></div>'
-            f'<div class="finding-body">'
-            f'<div>{esc(cs.description)}</div>'
+            f'<div style="font-size:13px;">{esc(cs.description)}</div>'
             f'<pre class="code-snip">{esc(cs.snippet)}</pre>'
             f'<div class="fix-tip">建议：{esc(cs.remediation)}</div>'
-            f'</div></div>'
+            f'</div>'
         )
 
-    findings_html = "\n".join(finding_cards) if finding_cards else '<div class="empty-ok">未检出高危密钥、许可证冲突、漏洞或 SAST 缺陷。</div>'
+    findings_html = "\n".join(finding_cards) or '<div class="empty-ok">未检出安全隐患或合规冲突，质量门禁全部通过。</div>'
 
     sbom_rows = "\n".join(
-        f"<tr><td><code>{esc(c.name)}</code></td><td>{esc(c.version)}</td><td>{esc(c.ecosystem)}</td>"
-        f"<td><span class='lic-tag'>{esc(c.license_id)}</span></td><td>{'直接依赖' if c.direct else '传递依赖'}</td>"
-        f"<td><code>{esc(c.source_file)}</code></td></tr>"
+        f"<tr><td><code>{esc(c.name)}</code></td><td class='mono'>{esc(c.version)}</td><td>{esc(c.ecosystem)}</td>"
+        f"<td>{'已导入调用' if c.used_in_code else '未直接引用'}</td>"
+        f"<td><code>{esc(c.license_id)}</code></td><td><code>{esc(c.source_file)}</code></td></tr>"
         for c in report.components
-    ) or '<tr><td colspan="6" class="muted">未解析到第三方依赖清单。</td></tr>'
+    ) or '<tr><td colspan="6" class="muted">未解析到外部依赖清单。</td></tr>'
 
     gov_rows = "\n".join(
-        f"<tr><td>{esc(g.name)}</td><td>{esc(g.category)}</td>"
+        f"<tr><td><strong>{esc(g.name)}</strong></td><td class='muted'>{esc(g.category)}</td>"
         f"<td><span class='badge {'sev-ok' if g.passed else 'sev-medium'}'>{'通过' if g.passed else '待完善'}</span></td>"
-        f"<td>{g.score:.0f} / {g.max_score:.0f}</td><td>{esc(g.details)}</td></tr>"
+        f"<td class='mono'>{g.score:.0f}/{g.max_score:.0f}</td><td>{esc(g.details)}</td></tr>"
         for g in report.governance_checks
     )
 
+    dim_bars_html = _build_dim_bars_html(report)
+    reach_count = sum(1 for v in report.vulnerabilities if v.reachable is True)
+    unreach_count = sum(1 for v in report.vulnerabilities if v.reachable is False)
     roadmap_html = "\n".join(
         f"<div class='roadmap-item'><span class='badge sev-high'>{esc(r['priority'])}</span> "
-        f"<strong>{esc(r['title'])}</strong><p>{esc(r['action'])} <span class='muted'>({esc(r['impact'])})</span></p></div>"
+        f"<strong>{esc(r['title'])}</strong><div class='muted-xs' style='margin-top:4px;'>{esc(r['action'])}</div></div>"
         for r in s.roadmap
-    ) or "<div class='empty-ok'>项目整体状况优秀，暂无紧急整改项。</div>"
+    ) or "<div class='empty-ok'>无紧急整改项。</div>"
 
-    dim_rows = "\n".join(
-        f"<tr><td><strong>{esc(d.name)}</strong></td><td>{d.score:.1f}</td><td>{int(d.weight*100)}%</td>"
-        f"<td>{d.weighted_score:.1f}</td><td>{d.issue_count}</td><td>{esc(d.summary)}</td></tr>"
-        for d in s.dimensions
-    )
-
-    report_json_safe = json.dumps({"scan_id": report.scan_id, "score": s.total_score}, ensure_ascii=False)
+    meta_json = json.dumps({"scan_id": report.scan_id, "score": s.total_score}, ensure_ascii=False)
 
     return f"""<!DOCTYPE html>
 <html lang="zh-CN">
@@ -191,119 +147,115 @@ def render_html_report(report: AuditReport) -> str:
 <title>OpenGuard 审计报告 - {esc(report.target_name)}</title>
 <style>
   :root {{
-    --bg: #0f172a; --surface: #1e293b; --surface-2: #0b1220; --border: #334155;
-    --text: #f1f5f9; --text-muted: #94a3b8; --accent: #6366f1;
+    --bg: #f8f9fb; --surface: #ffffff; --surface-sub: #f2f4f7; --border: #e4e7ec;
+    --text: #101828; --text-muted: #667085; --primary: #111827; --code-bg: #f6f8fa;
   }}
-  body.light {{
-    --bg: #f8fafc; --surface: #ffffff; --surface-2: #f1f5f9; --border: #cbd5e1;
-    --text: #0f172a; --text-muted: #475569; --accent: #4f46e5;
+  body.theme-dark {{
+    --bg: #09090b; --surface: #111113; --surface-sub: #18181b; --border: #27272a;
+    --text: #fafafa; --text-muted: #a1a1aa; --primary: #fafafa; --code-bg: #141417;
   }}
   * {{ box-sizing: border-box; }}
-  body {{ margin: 0; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Microsoft YaHei", sans-serif; background: var(--bg); color: var(--text); line-height: 1.55; }}
-  .container {{ max-width: 1220px; margin: 0 auto; padding: 24px 20px 56px; }}
-  .header {{ display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 16px; border-bottom: 1px solid var(--border); padding-bottom: 18px; margin-bottom: 22px; }}
-  .brand {{ font-size: 22px; font-weight: 800; letter-spacing: -0.3px; }}
-  .brand span {{ color: var(--accent); }}
-  .meta-line {{ color: var(--text-muted); font-size: 13px; margin-top: 4px; }}
-  .btn {{ background: var(--surface); color: var(--text); border: 1px solid var(--border); padding: 7px 14px; border-radius: 8px; cursor: pointer; font-size: 13px; font-weight: 600; }}
-  .btn:hover {{ border-color: var(--accent); }}
-  .grid-top {{ display: grid; grid-template-columns: repeat(auto-fit, minmax(290px, 1fr)); gap: 18px; margin-bottom: 22px; }}
-  .card {{ background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 18px; }}
-  .card h2 {{ margin: 0 0 12px; font-size: 15px; color: var(--text); border-left: 3px solid var(--accent); padding-left: 10px; }}
-  .flex-center {{ display: flex; align-items: center; justify-content: center; gap: 20px; flex-wrap: wrap; }}
-  .kpi-grid {{ display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px; flex: 1; min-width: 170px; }}
-  .kpi {{ background: var(--surface-2); border: 1px solid var(--border); border-radius: 8px; padding: 10px 12px; }}
-  .kpi .num {{ font-size: 20px; font-weight: 800; }}
-  .kpi .lbl {{ font-size: 12px; color: var(--text-muted); }}
-  table {{ width: 100%; border-collapse: collapse; font-size: 13px; }}
-  th, td {{ padding: 9px 10px; border-bottom: 1px solid var(--border); text-align: left; }}
-  th {{ color: var(--text-muted); font-weight: 600; background: var(--surface-2); }}
-  code {{ font-family: Consolas, Monaco, monospace; background: var(--surface-2); padding: 2px 6px; border-radius: 5px; font-size: 12px; }}
-  .badge {{ display: inline-block; padding: 2px 8px; border-radius: 999px; font-size: 11px; font-weight: 700; color: #fff; }}
-  .sev-critical {{ background: #dc2626; }} .sev-high {{ background: #ea580c; }} .sev-medium {{ background: #d97706; color: #111827; }}
-  .sev-low {{ background: #2563eb; }} .sev-info {{ background: #64748b; }} .sev-ok {{ background: #059669; }}
-  .kind-pill {{ font-size: 11px; padding: 2px 8px; border-radius: 6px; background: rgba(99,102,241,0.16); color: #a5b4fc; border: 1px solid rgba(99,102,241,0.35); font-weight: 600; }}
-  body.light .kind-pill {{ color: #4338ca; }}
-  .lic-tag {{ padding: 2px 7px; border-radius: 5px; border: 1px solid var(--border); font-size: 12px; }}
-  .toolbar {{ display: flex; gap: 8px; flex-wrap: wrap; align-items: center; margin-bottom: 14px; }}
-  .tab {{ background: var(--surface-2); border: 1px solid var(--border); color: var(--text-muted); padding: 6px 12px; border-radius: 8px; cursor: pointer; font-size: 12px; font-weight: 600; }}
-  .tab.active {{ background: var(--accent); color: #fff; border-color: var(--accent); }}
-  .search-input {{ margin-left: auto; background: var(--surface-2); border: 1px solid var(--border); color: var(--text); padding: 7px 12px; border-radius: 8px; min-width: 220px; font-size: 13px; }}
-  .finding-card {{ background: var(--surface-2); border: 1px solid var(--border); border-radius: 10px; padding: 13px 15px; margin-bottom: 11px; }}
-  .finding-head {{ display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-bottom: 8px; }}
+  body {{ margin: 0; font-family: -apple-system, BlinkMacSystemFont, "Inter", "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif; background: var(--bg); color: var(--text); font-size: 13.5px; line-height: 1.5; }}
+  .container {{ max-width: 1180px; margin: 0 auto; padding: 24px 20px 56px; }}
+  .header {{ display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 12px; border-bottom: 1px solid var(--border); padding-bottom: 14px; margin-bottom: 18px; }}
+  .brand {{ font-size: 18px; font-weight: 700; letter-spacing: -0.2px; }}
+  .btn {{ background: var(--surface); color: var(--text); border: 1px solid var(--border); padding: 6px 12px; border-radius: 6px; cursor: pointer; font-size: 12.5px; font-weight: 500; }}
+  .card {{ background: var(--surface); border: 1px solid var(--border); border-radius: 8px; padding: 16px 18px; margin-bottom: 16px; }}
+  .card h2 {{ margin: 0 0 12px; font-size: 14px; font-weight: 600; }}
+  .qg-top {{ display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 12px; margin-bottom: 12px; }}
+  .qg-pill {{ padding: 4px 10px; border-radius: 6px; font-size: 12px; font-weight: 700; }}
+  .qg-passed {{ background: #f0fdf4; color: #15803d; border: 1px solid #bbf7d0; }}
+  .qg-failed {{ background: #fef2f2; color: #b91c1c; border: 1px solid #fecaca; }}
+  .qg-conds {{ display: grid; grid-template-columns: repeat(auto-fit, minmax(185px, 1fr)); gap: 8px; }}
+  .qg-cond {{ display: flex; justify-content: space-between; padding: 7px 10px; border-radius: 6px; border: 1px solid var(--border); background: var(--bg); font-size: 12px; }}
+  .qg-cond.pass {{ border-left: 3px solid #15803d; }} .qg-cond.fail {{ border-left: 3px solid #b91c1c; }}
+  .grid-2 {{ display: grid; grid-template-columns: repeat(auto-fit, minmax(340px, 1fr)); gap: 16px; }}
+  .dim-item {{ margin-bottom: 11px; }}
+  .dim-head {{ display: flex; justify-content: space-between; font-size: 12.5px; margin-bottom: 4px; }}
+  .dim-track {{ height: 7px; background: var(--surface-sub); border-radius: 999px; overflow: hidden; border: 1px solid var(--border); }}
+  .dim-fill {{ height: 100%; border-radius: 999px; }}
+  .kpi-row {{ display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin-bottom: 12px; }}
+  .kpi {{ background: var(--bg); border: 1px solid var(--border); border-radius: 6px; padding: 9px 11px; }}
+  .kpi .num {{ font-size: 18px; font-weight: 700; }}
+  .muted {{ color: var(--text-muted); }} .muted-xs {{ color: var(--text-muted); font-size: 12px; }}
+  .mono, code, pre {{ font-family: "Cascadia Code", Consolas, monospace; }}
+  code {{ background: var(--surface-sub); padding: 1px 5px; border-radius: 4px; font-size: 11.5px; border: 1px solid var(--border); }}
+  table {{ width: 100%; border-collapse: collapse; font-size: 12.5px; }}
+  th, td {{ padding: 8px 10px; border-bottom: 1px solid var(--border); text-align: left; }}
+  th {{ color: var(--text-muted); background: var(--bg); font-weight: 600; }}
+  .badge {{ display: inline-block; padding: 2px 7px; border-radius: 999px; font-size: 11px; font-weight: 600; }}
+  .sev-critical {{ background: #fef2f2; color: #b91c1c; border: 1px solid #fecaca; }}
+  .sev-high {{ background: #fff7ed; color: #c2410c; border: 1px solid #fed7aa; }}
+  .sev-medium {{ background: #fffbeb; color: #b45309; border: 1px solid #fde68a; }}
+  .sev-low {{ background: #eff6ff; color: #1d4ed8; border: 1px solid #bfdbfe; }}
+  .sev-ok {{ background: #f0fdf4; color: #15803d; border: 1px solid #bbf7d0; }}
+  .kind-pill {{ font-size: 11px; padding: 2px 7px; border-radius: 999px; background: var(--surface-sub); border: 1px solid var(--border); font-weight: 600; }}
+  .toolbar {{ display: flex; gap: 6px; flex-wrap: wrap; align-items: center; margin-bottom: 12px; }}
+  .tab {{ background: var(--bg); border: 1px solid var(--border); color: var(--text-muted); padding: 5px 10px; border-radius: 999px; cursor: pointer; font-size: 12px; }}
+  .tab.active {{ background: var(--primary); color: var(--bg); border-color: var(--primary); }}
+  .search-input {{ margin-left: auto; background: var(--bg); border: 1px solid var(--border); color: var(--text); padding: 6px 10px; border-radius: 6px; min-width: 220px; font-size: 12.5px; }}
+  .finding-card {{ background: var(--bg); border: 1px solid var(--border); border-radius: 6px; padding: 12px 14px; margin-bottom: 10px; }}
+  .finding-head {{ display: flex; align-items: center; gap: 7px; flex-wrap: wrap; margin-bottom: 6px; }}
   .finding-head .loc {{ margin-left: auto; }}
-  .finding-body {{ font-size: 13px; }}
-  .code-snip {{ margin: 8px 0; padding: 8px 10px; background: #020617; color: #e2e8f0; border-radius: 7px; overflow-x: auto; font-size: 12px; font-family: Consolas, monospace; }}
-  .fix-tip {{ color: #34d399; font-size: 12.5px; margin-top: 6px; }}
-  body.light .fix-tip {{ color: #047857; }}
-  .muted {{ color: var(--text-muted); }}
-  .empty-ok {{ padding: 20px; text-align: center; color: #10b981; font-weight: 600; }}
-  .roadmap-item {{ padding: 10px 12px; background: var(--surface-2); border-radius: 8px; border: 1px solid var(--border); margin-bottom: 8px; }}
-  .roadmap-item p {{ margin: 5px 0 0; font-size: 13px; }}
+  .code-snip {{ margin: 6px 0; padding: 8px 10px; background: var(--code-bg); border: 1px solid var(--border); border-radius: 6px; overflow-x: auto; font-size: 12px; }}
+  .runbook-ul {{ margin: 6px 0 0; padding-left: 18px; font-size: 12px; color: var(--text-muted); }}
+  .fix-tip {{ color: #15803d; font-size: 12px; margin-top: 6px; }}
+  .roadmap-item {{ padding: 8px 10px; background: var(--bg); border: 1px solid var(--border); border-radius: 6px; margin-bottom: 8px; }}
+  .empty-ok {{ padding: 18px; text-align: center; color: #15803d; font-weight: 600; }}
 </style>
 </head>
 <body>
 <div class="container">
   <div class="header">
     <div>
-      <div class="brand">OpenGuard <span>开源卫士</span> · 供应链安全与合规审计报告</div>
-      <div class="meta-line">
-        目标项目：<strong>{esc(report.target_name)}</strong> &nbsp;|&nbsp;
-        主许可证：<code>{esc(report.project_license)}</code> &nbsp;|&nbsp;
-        扫描 ID：<code>{esc(report.scan_id)}</code> &nbsp;|&nbsp;
-        时间：{esc(report.scanned_at)} &nbsp;|&nbsp;
-        耗时：{s.scan_duration_ms:.1f} ms
-      </div>
+    <div class="brand" style="display:flex;align-items:center;gap:8px;">
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3a12 12 0 0 0 8.5 3a12 12 0 0 1 -8.5 15a12 12 0 0 1 -8.5 -15a12 12 0 0 0 8.5 -3"/><path d="M9 12l2 2l4 -4"/></svg>
+      <span>OpenGuard 供应链安全与合规审计报告 · {esc(report.target_name)}</span>
     </div>
-    <button class="btn" onclick="document.body.classList.toggle('light')">切换明暗主题</button>
+      <div class="muted-xs">主许可证: <code>{esc(report.project_license)}</code> | 扫描 ID: <code>{esc(report.scan_id)}</code> | {esc(report.scanned_at)} | 耗时 {s.scan_duration_ms:.1f} ms</div>
+    </div>
+    <button class="btn" onclick="document.body.classList.toggle('theme-dark')">切换浅色 / 深色模式</button>
   </div>
 
-  <div class="grid-top">
+  <div class="card">
+    <div class="qg-top">
+      <div><span class="qg-pill {"qg-passed" if is_pass else "qg-failed"}">QUALITY GATE {esc(qg.status if qg else "DONE")}</span></div>
+      <div style="font-size:22px;font-weight:700;">{s.total_score:.1f} <span class="muted" style="font-size:13px;">/ 100 · 等级 {esc(s.grade)}</span></div>
+    </div>
+    <div class="qg-conds">{conds_html}</div>
+  </div>
+
+  <div class="grid-2">
+    <div class="card"><h2>五维安全与合规评估指标</h2>{dim_bars_html}</div>
     <div class="card">
-      <h2>综合健康度评分</h2>
-      <div class="flex-center">
-        {gauge_svg}
-        <div class="kpi-grid">
-          <div class="kpi"><div class="num" style="color:#ef4444">{s.severity_counts.get('CRITICAL', 0)}</div><div class="lbl">严重 (CRITICAL)</div></div>
-          <div class="kpi"><div class="num" style="color:#f97316">{s.severity_counts.get('HIGH', 0)}</div><div class="lbl">高危 (HIGH)</div></div>
-          <div class="kpi"><div class="num">{len(report.components)}</div><div class="lbl">SBOM 依赖数</div></div>
-          <div class="kpi"><div class="num" style="color:#10b981">{report.suppressed_count}</div><div class="lbl">AST+熵值过滤误报</div></div>
-        </div>
+      <h2>漏洞可达性与整改路线图</h2>
+      <div class="kpi-row">
+        <div class="kpi"><div class="num" style="color:#b91c1c;">{reach_count}</div><div class="muted-xs">源码可达 CVE/投毒</div></div>
+        <div class="kpi"><div class="num">{unreach_count}</div><div class="muted-xs">未直接导入 CVE</div></div>
+        <div class="kpi"><div class="num" style="color:#15803d;">{report.suppressed_count}</div><div class="muted-xs">AST+熵值过滤误报</div></div>
       </div>
-    </div>
-    <div class="card">
-      <h2>五维合规雷达图</h2>
-      <div class="flex-center">{radar_svg}</div>
+      {roadmap_html}
     </div>
   </div>
 
-  <div class="card" style="margin-bottom:20px;">
-    <h2>维度得分明细与优先整改路线图</h2>
-    <table style="margin-bottom:14px;">
-      <thead><tr><th>评估维度</th><th>得分</th><th>权重</th><th>加权分</th><th>问题数</th><th>诊断摘要</th></tr></thead>
-      <tbody>{dim_rows}</tbody>
-    </table>
-    {roadmap_html}
-  </div>
-
-  <div class="card" style="margin-bottom:20px;">
-    <h2>风险发现详情与精确溯源 ({len(finding_cards)})</h2>
+  <div class="card">
+    <h2>风险发现与溯源详情 ({len(finding_cards)})</h2>
     <div class="toolbar">
       <button class="tab active" onclick="filterFindings('all', this)">全部 ({len(finding_cards)})</button>
       <button class="tab" onclick="filterFindings('secret', this)">工作区密钥 ({len(report.secrets)})</button>
       <button class="tab" onclick="filterFindings('history', this)">Git 历史密钥 ({len(report.git_history_secrets)})</button>
       <button class="tab" onclick="filterFindings('license', this)">许可证冲突 ({len(report.license_conflicts)})</button>
       <button class="tab" onclick="filterFindings('vuln', this)">漏洞与投毒 ({len(report.vulnerabilities)})</button>
-      <button class="tab" onclick="filterFindings('sast', this)">SAST 代码安全 ({len(report.code_security_findings)})</button>
-      <input class="search-input" type="search" placeholder="搜索文件名 / CVE / 规则..." oninput="searchFindings(this.value)">
+      <button class="tab" onclick="filterFindings('sast', this)">SAST ({len(report.code_security_findings)})</button>
+      <input class="search-input" type="search" placeholder="过滤文件 / CVE / 规则..." oninput="searchFindings(this.value)">
     </div>
-    <div id="findings-list">{findings_html}</div>
+    <div>{findings_html}</div>
   </div>
 
-  <div class="card" style="margin-bottom:20px;">
+  <div class="card">
     <h2>软件物料清单 SBOM ({len(report.components)} 组件)</h2>
     <table>
-      <thead><tr><th>组件名称</th><th>版本</th><th>生态</th><th>SPDX 许可证</th><th>依赖层级</th><th>来源清单</th></tr></thead>
+      <thead><tr><th>组件</th><th>版本</th><th>生态</th><th>代码引用状态</th><th>SPDX 许可证</th><th>来源文件</th></tr></thead>
       <tbody>{sbom_rows}</tbody>
     </table>
   </div>
@@ -317,15 +269,13 @@ def render_html_report(report: AuditReport) -> str:
   </div>
 </div>
 <script>
-  const OG_META = {report_json_safe};
-  let activeKind = 'all';
-  let queryText = '';
+  const OG_META = {meta_json};
+  let activeKind = 'all', queryText = '';
   function applyFilters() {{
     document.querySelectorAll('.finding-card').forEach(el => {{
       const k = el.getAttribute('data-kind');
-      const txt = el.textContent.toLowerCase();
       const okKind = activeKind === 'all' || k === activeKind;
-      const okSearch = !queryText || txt.includes(queryText);
+      const okSearch = !queryText || el.textContent.toLowerCase().includes(queryText);
       el.style.display = (okKind && okSearch) ? '' : 'none';
     }});
   }}

@@ -25,7 +25,9 @@ from openguard.scanners.code_security_scanner import CodeSecurityScanner
 from openguard.scanners.dependency_parser import DependencyParser
 from openguard.scanners.git_history_scanner import GitHistoryScanner
 from openguard.scanners.governance_checker import GovernanceChecker
+from openguard.scanners.install_script_scanner import InstallScriptScanner
 from openguard.scanners.license_analyzer import LicenseAnalyzer
+from openguard.scanners.reachability_analyzer import ReachabilityAnalyzer
 from openguard.scanners.secret_scanner import SecretScanner
 from openguard.scanners.vuln_scanner import VulnScanner
 from openguard.scoring.engine import ScoringEngine
@@ -120,9 +122,19 @@ class OpenGuardAuditor:
             graph=graph,
         )
 
-        # 5. Supply-Chain Vulnerabilities (Offline KB + OSV API + Typosquatting)
+        # 5. Supply-Chain Vulnerabilities (Offline KB + OSV API + Typosquatting + Install Script Guard)
         vuln_scanner = VulnScanner(offline=cfg.offline)
         vulnerabilities = vuln_scanner.scan_components(components)
+        install_script_alerts = InstallScriptScanner().scan_repository(resolved, exclude_patterns=cfg.exclude_patterns)
+        vulnerabilities.extend(install_script_alerts)
+
+        # 5b. Import-level CVE & Component Reachability Enrichment
+        ReachabilityAnalyzer().enrich(
+            resolved,
+            components=components,
+            vulnerabilities=vulnerabilities,
+            exclude_patterns=cfg.exclude_patterns,
+        )
 
         # 6. Static Application Security Testing (SAST)
         code_scanner = CodeSecurityScanner(cfg)

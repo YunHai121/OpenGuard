@@ -35,8 +35,13 @@ flowchart TD
 - 静态解析 PyPI、npm、Go、Maven、Rust、C/C++、PHP 七大生态清单及锁文件（`package-lock.json`、`Cargo.lock` 等），构建基于 `NetworkX` 的依赖有向图 $G=(V,E)$。
 - 识别项目主许可证（支持 MIT、Apache-2.0、BSD、GPL/AGPL/LGPL 及**木兰宽松许可证 MulanPSL-2.0**），通过 `nx.shortest_path` 定位强传染性依赖的最短传播链 `Project -> DirectDep -> TransitiveDep [GPL-3.0]`。
 
-### 2.3 五维量化评估模型 (`ScoringEngine`)
+### 2.3 源码级 CVE 可达性分析与安装脚本投毒检测 (`ReachabilityAnalyzer` & `InstallScriptScanner`)
+
+- **导入级可达性推导**：遍历项目 `.py`（AST `Import`/`ImportFrom`）、`.js/.ts/.mjs`（ES Import / CommonJS `require`）与 `.go` 源码，结合 PyPI 包名与模块名映射表（如 `PyYAML -> yaml`、`Pillow -> PIL`、`scikit-learn -> sklearn`），标记每个依赖与 CVE 是否真实被源码调用及其 `file:line` 位置，有效缓解传统 SCA 的海量误报疲劳。
+- **安装脚本行为防线**：静态审计 `package.json` 中的 `preinstall`/`install`/`postinstall` 与 `setup.py` AST，拦截远程管道下载执行、Base64 混淆载荷与异常系统命令调用。
+
+### 2.4 五维量化评估与确定性质量门禁 (`ScoringEngine` + `QualityGate`)
 
 采用饱和指数衰减映射与权重加权聚合：
 $$S_{\text{total}} = \sum_{i=1}^{5} w_i \cdot S_i, \quad S_{\text{sec/vuln/lic/sast}} = 100 \cdot \exp\left(-\frac{\sum p_k}{75}\right)$$
-其中默认权重为：密钥安全 $30\%$、供应链漏洞 $20\%$、许可证合规 $20\%$、SAST 代码安全 $15\%$、开源工程治理 $15\%$。
+其中默认权重为：密钥安全 $30\%$、供应链漏洞 $20\%$、许可证合规 $20\%$、SAST 代码安全 $15\%$、开源工程治理 $15\%$；并同步评估 5 项硬性发布准入门禁（工作区零密钥、历史零密钥、零可达高危 CVE、零强传染冲突、零投毒脚本）输出 `PASSED / FAILED`。

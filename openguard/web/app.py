@@ -21,6 +21,8 @@ from openguard.reporters.html_reporter import render_html_report
 from openguard.reporters.markdown_reporter import render_markdown_report
 from openguard.reporters.pdf_reporter import render_pdf_bytes
 from openguard.reporters.sarif_sbom_reporter import render_cyclonedx, render_sarif, render_spdx
+from openguard.scanners.secret_rules import build_builtin_secret_rules
+from openguard.utils.entropy import mask_secret
 from openguard.web.storage import AuditHistoryStore
 
 STATIC_DIR = Path(__file__).resolve().parent / "static"
@@ -43,6 +45,13 @@ class AutofixRequest(BaseModel):
     fix_secrets: bool = True
     fix_docs: bool = True
     license_id: str = "MIT"
+
+
+class TriageIgnoreRequest(BaseModel):
+    target: str
+    file_path: str
+    line_number: int = 1
+    mode: str = "inline"  # "inline" | "ignorefile"
 
 
 def create_app(db_path: Optional[Path] = None) -> FastAPI:
@@ -182,6 +191,84 @@ def create_app(db_path: Optional[Path] = None) -> FastAPI:
             doc_actions = DocGenerator().generate(target_path, license_id=req.license_id, apply=apply)
 
         return {"applied": apply, "secrets": secret_res_dict, "docs": doc_actions}
+
+    def _resolve_safe_target_file(target: str, file_path: str) -> tuple[Path, Path]:
+        root = Path(target).resolve()
+        if root.is_file():
+            root = root.parent
+        if not root.is_dir():
+            raise HTTPException(status_code=404, detail=f"目标根目录不存在: {root}")
+        candidate = (root / file_path).resolve()
+        if not candidate.is_relative_to(root):
+            raise HTTPException(status_code=403, detail="禁止访问目标仓库目录之外的路径。")
+        if not candidate.is_file():
+            raise HTTPException(status_code=404, detail=f"文件不存在: {file_path}")
+        return root, candidate
+
+    @fastapi_app.get("/api/file-context")
+    def get_file_context(
+        target: str,
+        file_path: str,
+        line: int = 1,
+        radius: int = 6,
+    ) -> Dict[str, Any]:
+        _, fpath = _resolve_safe_target_file(target, file_path)
+        raw_lines = fpath.read_text(encoding="utf-8", errors="replace").splitlines()
+        rules = build_builtin_secret_rules()
+
+        start_ln = max(1, line - max(1, min(radius, 20)))
+        end_ln = min(len(raw_lines), line + max(1, min(radius, 20)))
+
+        context_lines: List[Dict[str, Any]] = []
+        for ln_no in range(start_ln, end_ln + 1):
+            txt = raw_lines[ln_no - 1]
+            # Mask any secret token on the line so plaintext secrets are never exposed
+            for rule in rules:
+                for m in rule.pattern.finditer(txt):
+                    try:
+                        val = m.group(rule.extract_group) if rule.extract_group > 0 else m.group(0)
+                    except IndexError:
+                        val = m.group(0)
+                    if val and len(val) >= 8:
+                        txt = txt.replace(val, mask_secret(val))
+            context_lines.append({"num": ln_no, "text": txt, "highlight": ln_no == line})
+
+        return {
+            "file_path": file_path,
+            "start_line": start_ln,
+            "highlight_line": line,
+            "lines": context_lines,
+        }
+
+    @fastapi_app.post("/api/triage/ignore")
+    def triage_ignore(req: TriageIgnoreRequest) -> Dict[str, Any]:
+        root, fpath = _resolve_safe_target_file(req.target, req.file_path)
+        mode = req.mode.lower().strip()
+
+        if mode == "ignorefile":
+            ig_file = root / ".openguardignore"
+            existing = ig_file.read_text(encoding="utf-8", errors="replace") if ig_file.is_file() else ""
+            norm_rel = req.file_path.replace("\\", "/").lstrip("./")
+            if norm_rel not in existing.splitlines():
+                sep = "\n" if existing and not existing.endswith("\n") else ""
+                ig_file.write_text(existing + sep + norm_rel + "\n", encoding="utf-8")
+            return {"status": "ignored_in_file", "target": norm_rel}
+
+        lines = fpath.read_text(encoding="utf-8", errors="replace").splitlines(keepends=True)
+        idx = req.line_number - 1
+        if not (0 <= idx < len(lines)):
+            raise HTTPException(status_code=400, detail=f"行号越界: {req.line_number}")
+
+        cur_line = lines[idx]
+        if "openguard: ignore" not in cur_line.lower():
+            ext = fpath.suffix.lower()
+            marker = "// openguard: ignore" if ext in (".js", ".ts", ".jsx", ".tsx", ".go", ".java", ".rs") else "# openguard: ignore"
+            ending = "\n" if cur_line.endswith("\n") else ""
+            body = cur_line.rstrip("\r\n")
+            lines[idx] = f"{body}  {marker}{ending}"
+            fpath.write_text("".join(lines), encoding="utf-8")
+
+        return {"status": "inline_ignored", "file_path": req.file_path, "line_number": req.line_number}
 
     @fastapi_app.get("/api/export/{scan_id}/{fmt}")
     def export_scan(scan_id: str, fmt: str) -> Response:

@@ -10,10 +10,12 @@ from openguard.models import AuditReport
 def render_markdown_report(report: AuditReport) -> str:
     """Render a structured Markdown summary report suitable for PR comments or documentation."""
     s = report.summary
+    qg = s.quality_gate
+    qg_label = f" | **质量门禁**: `{qg.status}`" if qg else ""
     lines: List[str] = [
         f"# OpenGuard 安全与开源合规审计报告 — `{report.target_name}`",
         "",
-        f"> **综合评分**: **{s.total_score:.1f} / 100**（等级 **{s.grade}**） | "
+        f"> **综合评分**: **{s.total_score:.1f} / 100**（等级 **{s.grade}**）{qg_label} | "
         f"**项目许可证**: `{report.project_license}` | "
         f"**扫描编号**: `{report.scan_id}` | "
         f"**扫描耗时**: `{s.scan_duration_ms:.1f} ms`",

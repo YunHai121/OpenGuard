@@ -27,17 +27,17 @@
    - 零编译静态解析 **PyPI / npm / Go / Maven / Rust / C++ / PHP** 依赖清单与锁文件（`requirements.txt`、`pyproject.toml`、`package-lock.json`、`go.mod`、`pom.xml`、`Cargo.lock` 等），构建 `NetworkX` 依赖有向图并导出 **CycloneDX 1.5** 与 **SPDX 2.3** 标准 SBOM。
    - 支持 **20+ SPDX 主许可证识别（含木兰宽松许可证 `MulanPSL-2.0`）**，通过最短依赖路径算法自动定位 `MIT/Apache-2.0` 项目误引入 `GPL/AGPL/LGPL` 依赖的传染链条。
 
-3. **供应链已知漏洞与投毒检测 + Python AST SAST**
-   - 融合本地高危 CVE 知识库（含 Log4Shell、Spring4Shell、PyYAML、urllib3、lodash、minimist 等）与 OSV.dev 批量接口，支持 `--offline` 全离线运行。
-   - 基于 Levenshtein 编辑距离检测热门包的拼写仿冒包（Typosquatting，如 `reqeusts` 仿冒 `requests`）。
-   - 内置 Python AST 静态代码安全分析（`CWE-95/502/78/89/295/327/489`）及 JS/Shell 安全规则。
+3. **供应链已知漏洞、安装脚本投毒拦截与源码可达性分析 + AST SAST**
+   - 融合本地高危 CVE 知识库与 OSV.dev 批量接口，结合 **Python/JS/Go 导入级可达性分析**精准区分“已导入调用的可达 CVE”与“未直接引用噪音”（借鉴并改进 Snyk 痛点）。
+   - 静态扫描 `package.json` 生命周期脚本（`postinstall`/`preinstall`）与 `setup.py` 危险系统调用，主动阻断恶意安装载荷（吸收 Socket.dev 核心能力）。
+   - 基于 Levenshtein 编辑距离检测拼写仿冒包（`reqeusts`），内置 Python AST SAST（`CWE-95/502/78/89/295/327/489`）。
 
-4. **五维量化评分模型 + 一键自动脱敏重构 (`autofix`)**
-   - 从密钥安全（30%）、供应链漏洞（20%）、许可证合规（20%）、代码安全（15%）、工程治理（15%）五个维度输出 `0~100` 量化得分与优先级整改路线图。
-   - **`autofix` 自动修复**：一键预览 Unified Diff 并将硬编码密钥替换为 `os.getenv` / `process.env`（自动生成 `.env.example` 与备份 `.openguard_backup/`），同时支持一键补齐 `LICENSE`、`CONTRIBUTING.md`、`SECURITY.md`、`CHANGELOG.md`、`.gitignore` 与 `.gitlab-ci.yml`（适配校内 `git.hust.edu.cn`）。
+4. **确定性质量门禁、3 步应急 Runbook 与一键脱敏重构 (`autofix`)**
+   - 5 项硬性发布质量门禁（`PASSED / FAILED`）+ 五维量化得分，每条密钥命中附带厂商级 **3 步吊销与历史清理 Runbook**。
+   - **`autofix` 自动修复**与在线 Triage：支持行内豁免一键写入、硬编码环境变量重构（含 `.openguard_backup/` 回滚）及 `LICENSE`/`CONTRIBUTING.md`/`SECURITY.md`/`CHANGELOG.md`/`.gitlab-ci.yml` 一键补齐。
 
-5. **离线可用的 FastAPI 可视化工作台与多格式报告**
-   - 零外网 CDN 依赖的现代 Web 控制台（评分仪表盘、五维 SVG 雷达图、SVG 依赖拓扑图、Live Snippet 实时代码检测台、SQLite 审计历史与整改前后 Diff 对比）。
+5. **极简工程风离线 Web 工作台与多格式报告**
+   - 零外网 CDN 依赖的 Light-First 工程界面（支持深色切换与 `Ctrl+K` 全局检索）：包含质量门禁总览、Master-Detail 源码上下文溯源分栏、SVG 依赖传播图与整改前后 Diff 对比。
    - 支持导出 **HTML、中文 PDF（ReportLab）、SARIF 2.1.0、CycloneDX 1.5、SPDX 2.3、Markdown、JSON 及 SVG 徽章**。
 
 ---

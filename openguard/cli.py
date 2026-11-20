@@ -50,10 +50,17 @@ def _grade_color(grade: str) -> str:
 def _print_report_summary(report: AuditReport) -> None:
     s = report.summary
     color = _grade_color(s.grade)
+    qg = s.quality_gate
+    qg_str = (
+        f"[bold green]PASSED[/bold green]"
+        if (qg and qg.status == "PASSED")
+        else f"[bold red]FAILED[/bold red]"
+    ) if qg else "N/A"
     header = (
         f"[bold]项目名称:[/bold] {report.target_name}   "
         f"[bold]主许可证:[/bold] {report.project_license}   "
-        f"[bold]综合评分:[/bold] [{color}]{s.total_score:.1f}/100 ({s.grade})[/{color}]\n"
+        f"[bold]综合评分:[/bold] [{color}]{s.total_score:.1f}/100 ({s.grade})[/{color}]   "
+        f"[bold]质量门禁:[/bold] {qg_str}\n"
         f"[bold]扫描规模:[/bold] {s.files_scanned} 文件 / {s.lines_scanned} 行   "
         f"[bold]耗时:[/bold] {s.scan_duration_ms:.1f} ms   "
         f"[bold]AST+熵值过滤低置信误报:[/bold] {report.suppressed_count} 条"
@@ -107,14 +114,18 @@ def _print_report_summary(report: AuditReport) -> None:
         console.print(lic_tbl)
 
     if report.vulnerabilities:
-        v_tbl = Table(title=f"供应链已知漏洞与仿冒包 ({len(report.vulnerabilities)})", show_header=True)
+        v_tbl = Table(title=f"供应链已知漏洞、仿冒包与安装脚本告警 ({len(report.vulnerabilities)})", show_header=True)
         v_tbl.add_column("编号")
         v_tbl.add_column("组件")
+        v_tbl.add_column("可达性")
         v_tbl.add_column("级别/CVSS")
         v_tbl.add_column("修复版本")
         v_tbl.add_column("说明")
         for v in report.vulnerabilities[:15]:
-            v_tbl.add_row(v.id, f"{v.component_name}@{v.component_version}", f"{v.severity} ({v.cvss_score})", v.fixed_version, v.summary)
+            reach_str = (
+                "[red]可达[/red]" if v.reachable is True else ("[dim]未导入[/dim]" if v.reachable is False else "-")
+            )
+            v_tbl.add_row(v.id, f"{v.component_name}@{v.component_version}", reach_str, f"{v.severity} ({v.cvss_score})", v.fixed_version, v.summary)
         console.print(v_tbl)
 
 

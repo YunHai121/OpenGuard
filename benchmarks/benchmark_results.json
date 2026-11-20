@@ -14,8 +14,8 @@
       "recall": 1.0,
       "f1_score": 0.7273,
       "false_positive_rate": 0.625,
-      "latency_ms": 19.3,
-      "throughput_loc_per_sec": 16063.8,
+      "latency_ms": 18.75,
+      "throughput_loc_per_sec": 16535.3,
       "misclassified_samples": [
         {
           "id": "TN-PH-0",
@@ -80,8 +80,8 @@
       "recall": 0.6,
       "f1_score": 0.515,
       "false_positive_rate": 0.6083,
-      "latency_ms": 3.64,
-      "throughput_loc_per_sec": 85232.7,
+      "latency_ms": 3.61,
+      "throughput_loc_per_sec": 85753.8,
       "misclassified_samples": [
         {
           "id": "TP-AWS-1",
@@ -146,8 +146,8 @@
       "recall": 1.0,
       "f1_score": 1.0,
       "false_positive_rate": 0.0,
-      "latency_ms": 36.6,
-      "throughput_loc_per_sec": 8468.9,
+      "latency_ms": 34.61,
+      "throughput_loc_per_sec": 8957.3,
       "misclassified_samples": []
     }
   ],

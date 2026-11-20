@@ -36,6 +36,7 @@ class FindingCategory(str, Enum):
     GIT_HISTORY_SECRET = "GIT_HISTORY_SECRET"
     VULNERABILITY = "VULNERABILITY"
     TYPOSQUATTING = "TYPOSQUATTING"
+    SUPPLY_CHAIN_SCRIPT = "SUPPLY_CHAIN_SCRIPT"
     LICENSE_CONFLICT = "LICENSE_CONFLICT"
     CODE_SECURITY = "CODE_SECURITY"
     GOVERNANCE = "GOVERNANCE"
@@ -71,6 +72,7 @@ class SecretFinding(BaseModel):
     ast_context: str = "generic"
     filter_notes: List[str] = Field(default_factory=list)
     remediation: str = ""
+    runbook_steps: List[str] = Field(default_factory=list)
     cwe_id: str = "CWE-798"
     commit_hash: Optional[str] = None
     commit_author: Optional[str] = None
@@ -92,6 +94,8 @@ class DependencyComponent(BaseModel):
     license_source: str = "unknown"
     dependencies: List[str] = Field(default_factory=list)
     purl: str = ""
+    used_in_code: bool = False
+    import_locations: List[str] = Field(default_factory=list)
 
 
 class LicenseConflict(BaseModel):
@@ -128,6 +132,8 @@ class VulnerabilityFinding(BaseModel):
     source: str = "offline_db"
     category: FindingCategory = FindingCategory.VULNERABILITY
     remediation: str = ""
+    reachable: Optional[bool] = None
+    import_locations: List[str] = Field(default_factory=list)
 
 
 class CodeSecurityFinding(BaseModel):
@@ -173,6 +179,23 @@ class DimensionScore(BaseModel):
     summary: str
 
 
+class QualityGateCondition(BaseModel):
+    """Single deterministic SonarQube-style quality gate condition."""
+
+    metric: str
+    label: str
+    actual: int
+    threshold: str
+    passed: bool
+
+
+class QualityGate(BaseModel):
+    """Overall release readiness decision across security & compliance gates."""
+
+    status: str  # "PASSED" | "FAILED"
+    conditions: List[QualityGateCondition] = Field(default_factory=list)
+
+
 class AuditSummary(BaseModel):
     """Top-level quantified audit metrics and prioritization roadmap."""
 
@@ -184,6 +207,7 @@ class AuditSummary(BaseModel):
     lines_scanned: int = 0
     scan_duration_ms: float = 0.0
     roadmap: List[Dict[str, Any]] = Field(default_factory=list)
+    quality_gate: Optional[QualityGate] = None
 
 
 class AuditReport(BaseModel):
@@ -191,7 +215,7 @@ class AuditReport(BaseModel):
 
     model_config = ConfigDict(use_enum_values=True)
 
-    tool_version: str = "1.0.0"
+    tool_version: str = "1.1.0"
     scan_id: str = Field(default_factory=lambda: f"OG-{uuid4().hex[:10].upper()}")
     scanned_at: str = Field(
         default_factory=lambda: datetime.now(timezone.utc).astimezone().isoformat(timespec="seconds")

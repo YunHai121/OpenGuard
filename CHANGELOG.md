@@ -2,6 +2,15 @@
 
 All notable changes to **OpenGuard (开源卫士)** are documented in this file following [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and Semantic Versioning.
 
+## [1.1.0] - 2026-11-20
+
+### Added
+- **CVE 源码级可达性分析 (`ReachabilityAnalyzer`)**：跨 Python AST / JS / Go 静态追踪包导入与别名映射（如 `PyYAML -> yaml`），区分“源码实际可达漏洞”与“未直接引用依赖噪音”。
+- **安装脚本供应链投毒拦截 (`InstallScriptScanner`)**：静态审计 `package.json` 生命周期钩子（`postinstall`/`preinstall`）及 `setup.py` AST 中的远端下载管道执行、Base64 混淆载荷与系统命令调用。
+- **确定性质量门禁引擎 (`QualityGate`)**：基于 5 项硬性门禁条件（工作区零密钥、历史零密钥、零可达高危 CVE、零强传染冲突、零投毒脚本）输出明确的 `PASSED / FAILED` 发布准入判定。
+- **应急响应 Runbook 与在线 Triage 闭环**：每条秘密告警均附 3 步处置剧本；新增 `/api/file-context`（带路径穿越防御与凭据自动掩码）及 `/api/triage/ignore` 一键标记行内豁免。
+- **全新极简工程风 Web 工作台**：采用 Light-First 浅色默认设计（含 Linear Zinc 深色模式切换）、SonarQube 风格质量门禁横幅、Socket.dev 风格分段指标条、GitHub 安全风格 Master-Detail 分栏代码溯源器与全局 `Ctrl+K` 命令面板。
+
 ## [1.0.0] - 2026-11-20
 
 ### Added
