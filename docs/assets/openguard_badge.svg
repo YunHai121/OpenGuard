@@ -1,0 +1,18 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="178" height="22" role="img" aria-label="OpenGuard: A+ (100/100)">
+  <linearGradient id="og-b" x2="0" y2="100%">
+    <stop offset="0" stop-color="#fff" stop-opacity=".12"/>
+    <stop offset="1" stop-opacity=".14"/>
+  </linearGradient>
+  <clipPath id="og-r">
+    <rect width="178" height="22" rx="4" fill="#fff"/>
+  </clipPath>
+  <g clip-path="url(#og-r)">
+    <rect width="78" height="22" fill="#1e293b"/>
+    <rect x="78" width="100" height="22" fill="#10b981"/>
+    <rect width="178" height="22" fill="url(#og-b)"/>
+  </g>
+  <g fill="#fff" text-anchor="middle" font-family="Verdana,Geneva,DejaVu Sans,sans-serif" font-size="11" font-weight="600">
+    <text x="39.0" y="15">OpenGuard</text>
+    <text x="128.0" y="15">A+ (100/100)</text>
+  </g>
+</svg>
