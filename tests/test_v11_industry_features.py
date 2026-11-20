@@ -96,6 +96,9 @@ class TestQualityGateRunbooksAndTriageApi(unittest.TestCase):
         self.assertIsNotNone(demo_report.summary.quality_gate)
         self.assertEqual(demo_report.summary.quality_gate.status, "FAILED")
         self.assertEqual(len(demo_report.summary.quality_gate.conditions), 5)
+        cond_map = {c.metric: c for c in demo_report.summary.quality_gate.conditions}
+        self.assertGreaterEqual(cond_map["reachable_high_cves"].actual, 1)
+        self.assertFalse(cond_map["reachable_high_cves"].passed)
 
         # Every secret finding has 3-step runbook
         self.assertGreaterEqual(len(demo_report.secrets[0].runbook_steps), 3)

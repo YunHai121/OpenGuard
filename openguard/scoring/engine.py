@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from enum import Enum
 import math
 from typing import Any, Dict, List
 
@@ -28,6 +29,10 @@ SEVERITY_PENALTIES: Dict[str, float] = {
     Severity.LOW.value: 3.0,
     Severity.INFO.value: 0.0,
 }
+
+
+def _enum_val(val: Any) -> str:
+    return str(val.value) if isinstance(val, Enum) else str(val)
 
 
 def _dim_score_from_penalties(penalties: List[float]) -> float:
@@ -77,27 +82,27 @@ class ScoringEngine:
         scan_duration_ms: float = 0.0,
     ) -> AuditSummary:
         # 1. Secret Security Dimension
-        sec_penalties = [SEVERITY_PENALTIES.get(str(f.severity), 10.0) for f in secrets]
+        sec_penalties = [SEVERITY_PENALTIES.get(_enum_val(f.severity), 10.0) for f in secrets]
         # Historical ghost secrets also carry significant penalty (75% of active penalty)
-        sec_penalties.extend(SEVERITY_PENALTIES.get(str(f.severity), 10.0) * 0.75 for f in git_history_secrets)
+        sec_penalties.extend(SEVERITY_PENALTIES.get(_enum_val(f.severity), 10.0) * 0.75 for f in git_history_secrets)
         sec_score = _dim_score_from_penalties(sec_penalties)
         sec_count = len(secrets) + len(git_history_secrets)
 
         # 2. Supply Chain Vulnerability Dimension
-        vuln_penalties = [SEVERITY_PENALTIES.get(str(v.severity), 10.0) for v in vulnerabilities]
+        vuln_penalties = [SEVERITY_PENALTIES.get(_enum_val(v.severity), 10.0) for v in vulnerabilities]
         vuln_score = _dim_score_from_penalties(vuln_penalties)
 
         # 3. License Compliance Dimension
         lic_penalties: List[float] = []
         for lc in license_conflicts:
-            if str(lc.compatibility) == LicenseCompatibility.INCOMPATIBLE.value:
-                lic_penalties.append(SEVERITY_PENALTIES.get(str(lc.severity), 18.0))
-            elif str(lc.compatibility) == LicenseCompatibility.REVIEW_REQUIRED.value:
+            if _enum_val(lc.compatibility) == LicenseCompatibility.INCOMPATIBLE.value:
+                lic_penalties.append(SEVERITY_PENALTIES.get(_enum_val(lc.severity), 18.0))
+            elif _enum_val(lc.compatibility) == LicenseCompatibility.REVIEW_REQUIRED.value:
                 lic_penalties.append(6.0)
         lic_score = _dim_score_from_penalties(lic_penalties)
 
         # 4. Code Security (SAST) Dimension
-        sast_penalties = [SEVERITY_PENALTIES.get(str(c.severity), 8.0) for c in code_security_findings]
+        sast_penalties = [SEVERITY_PENALTIES.get(_enum_val(c.severity), 8.0) for c in code_security_findings]
         sast_score = _dim_score_from_penalties(sast_penalties)
 
         # 5. Governance & Documentation Dimension
@@ -166,7 +171,7 @@ class ScoringEngine:
             Severity.INFO.value: 0,
         }
         for item in [*secrets, *git_history_secrets, *vulnerabilities, *license_conflicts, *code_security_findings]:
-            sev = str(item.severity)
+            sev = _enum_val(item.severity)
             if sev in severity_counts:
                 severity_counts[sev] += 1
         severity_counts[Severity.LOW.value] += gov_issues
@@ -200,17 +205,17 @@ class ScoringEngine:
         reachable_high = sum(
             1
             for v in vulnerabilities
-            if str(v.category) == FindingCategory.VULNERABILITY.value
+            if _enum_val(v.category) == FindingCategory.VULNERABILITY.value
             and (v.reachable is not False)
-            and str(v.severity) in (Severity.CRITICAL.value, Severity.HIGH.value)
+            and _enum_val(v.severity) in (Severity.CRITICAL.value, Severity.HIGH.value)
         )
         incompat_lic = sum(
-            1 for c in license_conflicts if str(c.compatibility) == LicenseCompatibility.INCOMPATIBLE.value
+            1 for c in license_conflicts if _enum_val(c.compatibility) == LicenseCompatibility.INCOMPATIBLE.value
         )
         supply_attacks = sum(
             1
             for v in vulnerabilities
-            if str(v.category) in (FindingCategory.TYPOSQUATTING.value, FindingCategory.SUPPLY_CHAIN_SCRIPT.value)
+            if _enum_val(v.category) in (FindingCategory.TYPOSQUATTING.value, FindingCategory.SUPPLY_CHAIN_SCRIPT.value)
         )
 
         conditions = [

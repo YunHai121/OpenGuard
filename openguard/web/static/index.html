@@ -7,43 +7,13 @@
   <link rel="stylesheet" href="/static/styles.css" />
 </head>
 <body>
-  <!-- Minimal Top Navigation Bar -->
+  <!-- Two-Row GitHub-Style Editorial Header -->
   <header class="topbar">
     <div class="topbar-inner">
-      <div class="topbar-left">
-        <div class="brand">
-          <svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3a12 12 0 0 0 8.5 3a12 12 0 0 1 -8.5 15a12 12 0 0 1 -8.5 -15a12 12 0 0 0 8.5 -3"/><path d="M9 12l2 2l4 -4"/></svg>
-          <span class="brand-name">OpenGuard</span>
-          <span class="version-pill">v1.1</span>
-        </div>
-
-        <nav class="top-nav" aria-label="主导航">
-          <button class="top-tab active" data-view="overview">
-            <svg class="ico-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/></svg>
-            <span>概览 Overview</span>
-          </button>
-          <button class="top-tab" data-view="issues">
-            <svg class="ico-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 9v4"/><path d="M10.363 3.591l-8.106 13.534a1.914 1.914 0 0 0 1.636 2.871h16.214a1.914 1.914 0 0 0 1.636 -2.87l-8.106 -13.536a1.914 1.914 0 0 0 -3.274 0z"/><path d="M12 16h.01"/></svg>
-            <span>问题溯源 Issues</span>
-            <span id="nav-issues-count" class="count-pill hidden">0</span>
-          </button>
-          <button class="top-tab" data-view="sbom">
-            <svg class="ico-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 3l8 4.5v9l-8 4.5l-8 -4.5v-9l8 -4.5"/><path d="M12 12l8 -4.5"/><path d="M12 12v9"/><path d="M12 12l-8 -4.5"/></svg>
-            <span>供应链 SBOM</span>
-          </button>
-          <button class="top-tab" data-view="playground">
-            <svg class="ico-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 7l5 5l-5 5"/><path d="M12 19l7 0"/></svg>
-            <span>实时检测 Playground</span>
-          </button>
-          <button class="top-tab" data-view="remediation">
-            <svg class="ico-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M7 10h10"/><path d="M9 14h5"/><path d="M12 3a9 9 0 1 0 9 9"/></svg>
-            <span>自动修复 Remediation</span>
-          </button>
-          <button class="top-tab" data-view="history">
-            <svg class="ico-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 8l0 4l2 2"/><path d="M3.05 11a9 9 0 1 1 .5 4m-.5 5v-5h5"/></svg>
-            <span>历史对比 History</span>
-          </button>
-        </nav>
+      <div class="brand">
+        <svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3a12 12 0 0 0 8.5 3a12 12 0 0 1 -8.5 15a12 12 0 0 1 -8.5 -15a12 12 0 0 0 8.5 -3"/><path d="M9 12l2 2l4 -4"/></svg>
+        <span class="brand-name">OpenGuard</span>
+        <span class="version-pill">v1.1</span>
       </div>
 
       <div class="topbar-right">
@@ -74,6 +44,36 @@
           </div>
         </div>
       </div>
+    </div>
+
+    <div class="subnav-wrap">
+      <nav class="top-nav container" aria-label="主导航">
+        <button class="top-tab active" data-view="overview">
+          <svg class="ico-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/></svg>
+          <span>概览 Overview</span>
+        </button>
+        <button class="top-tab" data-view="issues">
+          <svg class="ico-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 9v4"/><path d="M10.363 3.591l-8.106 13.534a1.914 1.914 0 0 0 1.636 2.871h16.214a1.914 1.914 0 0 0 1.636 -2.87l-8.106 -13.536a1.914 1.914 0 0 0 -3.274 0z"/><path d="M12 16h.01"/></svg>
+          <span>问题溯源 Issues</span>
+          <span id="nav-issues-count" class="count-pill hidden">0</span>
+        </button>
+        <button class="top-tab" data-view="sbom">
+          <svg class="ico-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 3l8 4.5v9l-8 4.5l-8 -4.5v-9l8 -4.5"/><path d="M12 12l8 -4.5"/><path d="M12 12v9"/><path d="M12 12l-8 -4.5"/></svg>
+          <span>供应链 SBOM</span>
+        </button>
+        <button class="top-tab" data-view="playground">
+          <svg class="ico-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 7l5 5l-5 5"/><path d="M12 19l7 0"/></svg>
+          <span>实时检测</span>
+        </button>
+        <button class="top-tab" data-view="remediation">
+          <svg class="ico-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M7 10h10"/><path d="M9 14h5"/><path d="M12 3a9 9 0 1 0 9 9"/></svg>
+          <span>自动修复</span>
+        </button>
+        <button class="top-tab" data-view="history">
+          <svg class="ico-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 8l0 4l2 2"/><path d="M3.05 11a9 9 0 1 1 .5 4m-.5 5v-5h5"/></svg>
+          <span>历史对比</span>
+        </button>
+      </nav>
     </div>
   </header>
 
