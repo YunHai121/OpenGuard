@@ -1,0 +1,12 @@
+# OpenGuard 自审计与安全门禁配置
+include_git_history: false
+max_git_commits: 100
+offline: true
+min_confidence: 0.45
+entropy_threshold: 3.3
+weights:
+  secret_security: 0.30
+  supply_chain_vuln: 0.20
+  license_compliance: 0.20
+  code_security: 0.15
+  governance: 0.15

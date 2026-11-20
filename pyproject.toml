@@ -1,0 +1,60 @@
+[build-system]
+requires = ["setuptools>=68.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "openguard"
+version = "1.0.0"
+description = "OpenGuard (开源卫士) — 面向开源软件供应链的敏感信息检测、许可证合规与工程规范自动化审计平台"
+readme = "README.md"
+license = { text = "MIT" }
+requires-python = ">=3.10"
+authors = [
+    { name = "OpenGuard Contributors" },
+]
+keywords = [
+    "open-source",
+    "security",
+    "secret-detection",
+    "sbom",
+    "license-compliance",
+    "supply-chain",
+    "devsecops",
+    "sast",
+]
+classifiers = [
+    "Development Status :: 5 - Production/Stable",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Programming Language :: Python :: 3.14",
+    "Topic :: Security",
+    "Topic :: Software Development :: Quality Assurance",
+]
+dependencies = [
+    "fastapi>=0.115.0",
+    "uvicorn>=0.27.0",
+    "pydantic>=2.7.0",
+    "typer>=0.12.0",
+    "rich>=13.7.0",
+    "networkx>=3.2",
+    "httpx>=0.27.0",
+    "packaging>=24.0",
+    "PyYAML>=6.0.1",
+    "Jinja2>=3.1.4",
+    "reportlab>=4.1.0",
+]
+
+[project.scripts]
+openguard = "openguard.cli:app"
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["openguard*"]
+
+[tool.setuptools.package-data]
+openguard = ["web/static/*"]

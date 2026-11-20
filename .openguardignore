@@ -1,0 +1,7 @@
+# Exclude synthetic testbeds, benchmark decoys, and generated outputs from OpenGuard self-audits
+examples/vulnerable_demo_repo/
+examples/setup_demo_git_history.py
+benchmarks/
+tests/
+demo_outputs/
+.openguard_backup/
