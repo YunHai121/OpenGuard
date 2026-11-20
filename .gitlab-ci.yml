@@ -1,0 +1,27 @@
+# OpenGuard Security & License Compliance Pipeline (Compatible with git.hust.edu.cn)
+stages:
+  - test
+  - security_audit
+
+unit_tests:
+  stage: test
+  image: python:3.11-slim
+  before_script:
+    - pip install -r requirements.txt
+    - pip install -e . --no-build-isolation --no-deps
+  script:
+    - python -m unittest discover -s tests -v
+
+openguard_self_audit:
+  stage: security_audit
+  image: python:3.11-slim
+  before_script:
+    - pip install -r requirements.txt
+    - pip install -e . --no-build-isolation --no-deps
+  script:
+    - openguard scan . --offline --format all --output openguard_reports --fail-on high
+  artifacts:
+    when: always
+    paths:
+      - openguard_reports/
+    expire_in: 30 days

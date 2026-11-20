@@ -1,0 +1,167 @@
+{
+  "corpus_size": 220,
+  "true_positives_count": 100,
+  "true_negatives_count": 120,
+  "summary_table": [
+    {
+      "engine": "Baseline-A: Pure Regex",
+      "samples": 220,
+      "tp": 100,
+      "fp": 75,
+      "fn": 0,
+      "tn": 45,
+      "precision": 0.5714,
+      "recall": 1.0,
+      "f1_score": 0.7273,
+      "false_positive_rate": 0.625,
+      "latency_ms": 19.3,
+      "throughput_loc_per_sec": 16063.8,
+      "misclassified_samples": [
+        {
+          "id": "TN-PH-0",
+          "type": "FP",
+          "category": "fp_placeholder"
+        },
+        {
+          "id": "TN-PH-1",
+          "type": "FP",
+          "category": "fp_placeholder"
+        },
+        {
+          "id": "TN-PH-2",
+          "type": "FP",
+          "category": "fp_placeholder"
+        },
+        {
+          "id": "TN-PH-3",
+          "type": "FP",
+          "category": "fp_placeholder"
+        },
+        {
+          "id": "TN-PH-4",
+          "type": "FP",
+          "category": "fp_placeholder"
+        },
+        {
+          "id": "TN-PH-5",
+          "type": "FP",
+          "category": "fp_placeholder"
+        },
+        {
+          "id": "TN-PH-6",
+          "type": "FP",
+          "category": "fp_placeholder"
+        },
+        {
+          "id": "TN-PH-7",
+          "type": "FP",
+          "category": "fp_placeholder"
+        },
+        {
+          "id": "TN-PH-8",
+          "type": "FP",
+          "category": "fp_placeholder"
+        },
+        {
+          "id": "TN-PH-9",
+          "type": "FP",
+          "category": "fp_placeholder"
+        }
+      ]
+    },
+    {
+      "engine": "Baseline-B: Pure Shannon Entropy",
+      "samples": 220,
+      "tp": 60,
+      "fp": 73,
+      "fn": 40,
+      "tn": 47,
+      "precision": 0.4511,
+      "recall": 0.6,
+      "f1_score": 0.515,
+      "false_positive_rate": 0.6083,
+      "latency_ms": 3.64,
+      "throughput_loc_per_sec": 85232.7,
+      "misclassified_samples": [
+        {
+          "id": "TP-AWS-1",
+          "type": "FN",
+          "category": "cloud_aws"
+        },
+        {
+          "id": "TP-AWS-5",
+          "type": "FN",
+          "category": "cloud_aws"
+        },
+        {
+          "id": "TP-DB-0",
+          "type": "FN",
+          "category": "db_uri"
+        },
+        {
+          "id": "TP-DB-1",
+          "type": "FN",
+          "category": "db_uri"
+        },
+        {
+          "id": "TP-DB-2",
+          "type": "FN",
+          "category": "db_uri"
+        },
+        {
+          "id": "TP-DB-3",
+          "type": "FN",
+          "category": "db_uri"
+        },
+        {
+          "id": "TP-DB-4",
+          "type": "FN",
+          "category": "db_uri"
+        },
+        {
+          "id": "TP-DB-5",
+          "type": "FN",
+          "category": "db_uri"
+        },
+        {
+          "id": "TP-DB-6",
+          "type": "FN",
+          "category": "db_uri"
+        },
+        {
+          "id": "TP-DB-7",
+          "type": "FN",
+          "category": "db_uri"
+        }
+      ]
+    },
+    {
+      "engine": "OpenGuard: 3-Stage Hybrid (Regex + Entropy + AST)",
+      "samples": 220,
+      "tp": 100,
+      "fp": 0,
+      "fn": 0,
+      "tn": 120,
+      "precision": 1.0,
+      "recall": 1.0,
+      "f1_score": 1.0,
+      "false_positive_rate": 0.0,
+      "latency_ms": 36.6,
+      "throughput_loc_per_sec": 8468.9,
+      "misclassified_samples": []
+    }
+  ],
+  "fpr_reduction_vs_regex_pct": 100.0,
+  "supply_chain_benchmark": {
+    "target": "examples/vulnerable_demo_repo",
+    "components_parsed": 14,
+    "ecosystems_detected": [
+      "Go",
+      "PyPI",
+      "npm"
+    ],
+    "license_conflicts_detected": 3,
+    "vulnerabilities_and_typosquats_detected": 12,
+    "elapsed_ms": 414.92
+  }
+}

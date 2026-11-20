@@ -1,0 +1,30 @@
+name: OpenGuard CI & Self-Audit
+
+on:
+  push:
+    branches: [ main, master ]
+  pull_request:
+    branches: [ main, master ]
+
+jobs:
+  test-and-audit:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Install dependencies
+        run: |
+          pip install -r requirements.txt
+          pip install -e . --no-build-isolation --no-deps
+      - name: Run unit & integration tests
+        run: python -m unittest discover -s tests -v
+      - name: Run OpenGuard self-audit
+        run: openguard scan . --offline --format all --output openguard_reports --fail-on high
+      - name: Upload audit artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: openguard-self-audit
+          path: openguard_reports/
