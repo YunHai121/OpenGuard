@@ -198,6 +198,7 @@ body {
   padding: 7px 11px;
   border-radius: 8px;
   font-size: 13px;
+  min-width: 215px;
 }
 
 .scan-options {

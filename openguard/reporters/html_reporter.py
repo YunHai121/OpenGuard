@@ -13,7 +13,7 @@ from openguard.models import AuditReport
 def _build_radar_svg(report: AuditReport) -> str:
     """Compute a pure SVG 5-axis radar chart for the 5 audit dimensions."""
     dims = report.summary.dimensions
-    cx, cy, r = 140.0, 125.0, 82.0
+    cx, cy, r = 190.0, 125.0, 82.0
     n = len(dims) or 5
     short_labels = ["密钥安全", "供应链漏洞", "许可证合规", "代码安全", "工程治理"]
 
@@ -41,22 +41,20 @@ def _build_radar_svg(report: AuditReport) -> str:
         data_pts.append(f"{px:.1f},{py:.1f}")
         dots.append(f'<circle cx="{px:.1f}" cy="{py:.1f}" r="4" fill="#6366f1" stroke="#fff" stroke-width="1.5"/>')
 
-        lx = cx + (r + 24) * math.cos(ang)
+        lx = cx + (r + 18) * math.cos(ang)
         ly = cy + (r + 18) * math.sin(ang) + 4
         anchor = "middle"
         if math.cos(ang) > 0.25:
             anchor = "start"
-            lx -= 6
         elif math.cos(ang) < -0.25:
             anchor = "end"
-            lx += 6
         lbl = short_labels[i] if i < len(short_labels) else dim.name
         labels.append(
-            f'<text x="{lx:.1f}" y="{ly:.1f}" text-anchor="{anchor}" font-size="11" fill="var(--text-muted)" font-weight="600">'
+            f'<text x="{lx:.1f}" y="{ly:.1f}" text-anchor="{anchor}" font-size="11.5" fill="var(--text-muted)" font-weight="600">'
             f'{html.escape(lbl)} ({dim.score:.0f})</text>'
         )
 
-    return f"""<svg viewBox="0 0 280 250" width="280" height="250" aria-label="五维安全评分雷达图">
+    return f"""<svg viewBox="0 0 380 250" width="380" height="250" style="max-width:100%;height:auto;" aria-label="五维安全评分雷达图">
   {"".join(grid_rings)}
   {"".join(axes)}
   <polygon points="{" ".join(data_pts)}" fill="rgba(99,102,241,0.25)" stroke="#6366f1" stroke-width="2.2"/>

@@ -98,7 +98,7 @@ function buildGaugeSvg(score, grade) {
 }
 
 function buildRadarSvg(dimensions) {
-  const cx = 140, cy = 122, r = 78;
+  const cx = 190, cy = 122, r = 78;
   const labels = ['密钥安全', '供应链漏洞', '许可证合规', '代码安全', '工程治理'];
   const n = dimensions.length || 5;
   let rings = '', axes = '', pts = [], dots = '', lbls = '';
@@ -121,15 +121,15 @@ function buildRadarSvg(dimensions) {
     pts.push(`${px.toFixed(1)},${py.toFixed(1)}`);
     dots += `<circle cx="${px.toFixed(1)}" cy="${py.toFixed(1)}" r="4" fill="#6366f1" stroke="#fff" stroke-width="1.5"/>`;
 
-    let lx = cx + (r + 22) * Math.cos(a);
+    let lx = cx + (r + 18) * Math.cos(a);
     const ly = cy + (r + 16) * Math.sin(a) + 4;
     let anchor = 'middle';
-    if (Math.cos(a) > 0.25) { anchor = 'start'; lx -= 5; }
-    else if (Math.cos(a) < -0.25) { anchor = 'end'; lx += 5; }
-    lbls += `<text x="${lx.toFixed(1)}" y="${ly.toFixed(1)}" text-anchor="${anchor}" font-size="11" fill="#94a3b8" font-weight="600">${labels[i] || esc(d.name)} (${d.score.toFixed(0)})</text>`;
+    if (Math.cos(a) > 0.25) { anchor = 'start'; }
+    else if (Math.cos(a) < -0.25) { anchor = 'end'; }
+    lbls += `<text x="${lx.toFixed(1)}" y="${ly.toFixed(1)}" text-anchor="${anchor}" font-size="11.5" fill="#cbd5e1" font-weight="600">${labels[i] || esc(d.name)} (${d.score.toFixed(0)})</text>`;
   });
 
-  return `<svg viewBox="0 0 280 244" width="280" height="244">
+  return `<svg viewBox="0 0 380 244" width="380" height="244" style="max-width:100%;height:auto;">
     ${rings}${axes}
     <polygon points="${pts.join(' ')}" fill="rgba(99,102,241,0.28)" stroke="#6366f1" stroke-width="2.2"/>
     ${dots}${lbls}
@@ -390,7 +390,7 @@ $('finding-search').addEventListener('input', (e) => {
 
 // Playground Snippet
 $('btn-load-sample').addEventListener('click', () => {
-  const awsSynthetic = ['AKIA', '7F4K9P2M8Q3X6Z1W5N2R'].join('');
+  const awsSynthetic = ['AKIA', '7F4K9P2M8Q3X6Z1W'].join('');
   const ghSynthetic = ['ghp_', 'R8mK2pQ9xL4vW7nB5zY3cJ6tD1fH9sA2eG4u'].join('');
   $('snippet-code').value =
     `import os\nimport yaml\n\n` +
@@ -398,7 +398,7 @@ $('btn-load-sample').addEventListener('click', () => {
     `AWS_ACCESS_KEY = "${awsSynthetic}"\n` +
     `GITHUB_TOKEN = "${ghSynthetic}"\n\n` +
     `# 2. 常见测试占位符与 Git SHA（将被 AST+熵值引擎智能过滤）\n` +
-    `OPENAI_API_KEY = "sk-your_api_key_placeholder_example"\n` +
+    `API_KEY = "sk-your_api_key_placeholder_example"\n` +
     `COMMIT_SHA256 = "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"\n\n` +
     `# 3. 高危 SAST 反序列化漏洞 (CWE-502)\n` +
     `def parse_cfg(raw_yaml: str):\n` +
