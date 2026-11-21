@@ -106,7 +106,7 @@
     <section id="view-overview" class="view active">
       <div id="overview-empty" class="card empty-state">
         <div class="empty-title">准备就绪 — 选择预设演示仓库或输入本地路径开始审计</div>
-        <p class="muted">一次审计涵盖：46 类硬编码密钥与 Git 历史回溯、CVE 源码级可达性判断、7 生态 SBOM 与 GPL 传染链、安装脚本投毒拦截及 12 项开源工程规范体检。</p>
+        <p class="muted">一次审计涵盖：46+ 类硬编码密钥与 Base62 CRC32 校验、CVE Call-Graph 可达性与 CISA KEV/EPSS、10 生态 SBOM 与 GPL 传染链、7 语言 SAST/污点分析、AI 规则投毒与 IaC/CI 防线及 12 项开源工程规范体检。</p>
       </div>
 
       <div id="overview-content" class="hidden">
@@ -144,6 +144,15 @@
             <span id="gov-pass-summary" class="mono muted-xs"></span>
           </div>
           <div id="governance-container"></div>
+        </div>
+
+        <!-- Doctor Security Posture Readiness -->
+        <div class="card">
+          <div class="card-head">
+            <h2 class="card-title">仓库安全态势与工具链自检 (Doctor Posture)</h2>
+            <span id="doctor-posture-summary" class="mono muted-xs">检测中...</span>
+          </div>
+          <div id="doctor-posture-container" class="muted-xs">运行审计后自动加载 7 项仓库防线就绪度诊断。</div>
         </div>
       </div>
     </section>
@@ -187,6 +196,13 @@
 
     <!-- View 3: Supply Chain & SBOM -->
     <section id="view-sbom" class="view">
+      <div class="card">
+        <div class="card-head">
+          <h2 class="card-title">NTIA / CISA SBOM 质量评分与合规要素 (sbomqs 基准)</h2>
+          <span id="sbom-quality-badge" class="mono muted-xs">等待扫描</span>
+        </div>
+        <div id="sbom-quality-container" class="muted-xs">运行审计后将依据 7 项 NTIA 最小要素评估 CycloneDX 1.5 SBOM 完整度。</div>
+      </div>
       <div class="card">
         <div class="card-head">
           <h2 class="card-title">依赖与许可证传染传播图谱</h2>

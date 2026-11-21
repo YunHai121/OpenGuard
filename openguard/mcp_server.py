@@ -17,8 +17,11 @@ from typing import Any, Dict, List, Optional
 from openguard import __version__
 from openguard.auditor import OpenGuardAuditor
 from openguard.config import AuditConfig
+from openguard.dx import run_doctor
 from openguard.models import DependencyComponent
 from openguard.reporters.markdown_reporter import render_pr_comment
+from openguard.reporters.sarif_sbom_reporter import render_cyclonedx
+from openguard.sbom_tools import load_cyclonedx_json, score_sbom_quality
 from openguard.scanners.vuln_scanner import POPULAR_PACKAGES_FOR_TYPOSQUAT, VulnScanner
 
 MCP_PROTOCOL_VERSION = "2024-11-05"
@@ -90,6 +93,38 @@ MCP_TOOLS: List[Dict[str, Any]] = [
             "properties": {
                 "target_path": {"type": "string", "description": "Repository path."},
                 "diff_ref": {"type": "string", "description": "Optional git base ref for diff-aware review."},
+            },
+            "required": ["target_path"],
+        },
+    },
+    {
+        "name": "diagnose_repo_posture",
+        "description": (
+            "Run OpenGuard Doctor 7-point security posture & environment readiness diagnostics on a repository "
+            "(Python runtime, Git, .openguard.yml validity, pre-commit guard, CI/CD + Dependabot/CODEOWNERS, "
+            "MCP readiness, and custom policy/ecosystem manifests) with actionable fix commands."
+        ),
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "target_path": {"type": "string", "description": "Local repository directory path to diagnose."},
+            },
+            "required": ["target_path"],
+        },
+    },
+    {
+        "name": "evaluate_sbom_quality",
+        "description": (
+            "Score a CycloneDX SBOM JSON file (or generate one on the fly from a repository directory) "
+            "against the 7 NTIA/CISA Minimum Elements (0.0–10.0 quality score, grade, and per-element gaps)."
+        ),
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "target_path": {
+                    "type": "string",
+                    "description": "Path to a CycloneDX JSON file OR a repository directory to generate and score.",
+                },
             },
             "required": ["target_path"],
         },
@@ -173,6 +208,28 @@ def _handle_tool_call(name: str, arguments: Dict[str, Any]) -> Dict[str, Any]:
         cfg = AuditConfig(offline=True, diff_ref=arguments.get("diff_ref") or None)
         report = OpenGuardAuditor(cfg).audit(target)
         return {"markdown": render_pr_comment(report)}
+
+    if name == "diagnose_repo_posture":
+        target = Path(str(arguments["target_path"]))
+        return run_doctor(target)
+
+    if name == "evaluate_sbom_quality":
+        target = Path(str(arguments["target_path"]))
+        if not target.exists():
+            raise FileNotFoundError(f"目标路径不存在: {target}")
+        if target.is_file():
+            sbom_data = load_cyclonedx_json(target)
+        else:
+            report = OpenGuardAuditor(AuditConfig(offline=True)).audit(target)
+            sbom_data = render_cyclonedx(report)
+        qr = score_sbom_quality(sbom_data)
+        return {
+            "target_path": str(target.resolve()),
+            "overall_score": qr.overall_score,
+            "grade": qr.grade,
+            "component_count": qr.component_count,
+            "checks": qr.checks,
+        }
 
     raise ValueError(f"Unknown OpenGuard MCP tool: {name}")
 

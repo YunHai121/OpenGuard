@@ -276,6 +276,77 @@ function renderReport(report) {
   renderIssueList();
   renderGovernance(report.governance_checks);
   renderSbomTab(report);
+  loadDoctorPosture(report);
+  loadSbomQuality(report.scan_id);
+}
+
+async function loadDoctorPosture(report) {
+  const box = $('doctor-posture-container');
+  const badge = $('doctor-posture-summary');
+  if (!box || !badge) return;
+  const target = String(report.target_path || '');
+  if (!target || target.startsWith('http://') || target.startsWith('https://') || target.startsWith('git@')) {
+    badge.textContent = '远程 URL 已跳过本地体检';
+    mountEscapedHtml(box, '<div class="muted-xs">仅对本地代码仓执行 7 项工具链与配置态势自检。</div>');
+    return;
+  }
+  badge.textContent = '诊断中...';
+  try {
+    const resp = await fetch(`/api/doctor?target=${encodeURIComponent(target)}`);
+    if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+    const data = await resp.json();
+    badge.textContent = `${data.status} · OK ${Number(data.ok_count)} / WARN ${Number(data.warn_count)} / ERROR ${Number(data.error_count)}`;
+    const rows = (data.checks || [])
+      .map((c) => {
+        const cls = c.status === 'OK' ? 'badge-low' : c.status === 'WARN' ? 'badge-med' : 'badge-crit';
+        return `<tr>
+          <td class="mono">${esc(c.id)}</td>
+          <td><strong>${esc(c.name)}</strong></td>
+          <td><span class="badge ${cls}">${esc(c.status)}</span></td>
+          <td>${esc(c.details)}</td>
+          <td class="mono muted-xs">${esc(c.fix_hint || '-')}</td>
+        </tr>`;
+      })
+      .join('');
+    mountEscapedHtml(
+      box,
+      `<table class="data-table"><thead><tr><th>编号</th><th>检查项</th><th>状态</th><th>详情</th><th>修复指引</th></tr></thead><tbody>${rows}</tbody></table>`
+    );
+  } catch (err) {
+    badge.textContent = '不可用';
+    mountEscapedHtml(box, `<div class="muted-xs">无法加载仓库体检：${esc(err.message)}</div>`);
+  }
+}
+
+async function loadSbomQuality(scanId) {
+  const box = $('sbom-quality-container');
+  const badge = $('sbom-quality-badge');
+  if (!box || !badge || !scanId) return;
+  badge.textContent = '评估中...';
+  try {
+    const resp = await fetch(`/api/sbom-quality/${encodeURIComponent(scanId)}`);
+    if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+    const data = await resp.json();
+    badge.textContent = `${Number(data.overall_score).toFixed(2)} / 10.0 (${data.grade}) · ${Number(data.component_count)} 组件`;
+    const rows = (data.checks || [])
+      .map((c) => {
+        const cls = c.passed ? 'badge-low' : 'badge-med';
+        return `<tr>
+          <td class="mono">${esc(c.id)}</td>
+          <td>${esc(c.name)}</td>
+          <td class="mono">${Number(c.score).toFixed(2)} / ${Number(c.max).toFixed(1)}</td>
+          <td><span class="badge ${cls}">${c.passed ? 'PASS' : 'WARN'}</span></td>
+        </tr>`;
+      })
+      .join('');
+    mountEscapedHtml(
+      box,
+      `<table class="data-table"><thead><tr><th>要素编号</th><th>NTIA / CISA 最小要素</th><th>得分</th><th>合规状态</th></tr></thead><tbody>${rows}</tbody></table>`
+    );
+  } catch (err) {
+    badge.textContent = '不可用';
+    mountEscapedHtml(box, `<div class="muted-xs">无法加载 SBOM 质量评分：${esc(err.message)}</div>`);
+  }
 }
 
 function renderOverview(report) {

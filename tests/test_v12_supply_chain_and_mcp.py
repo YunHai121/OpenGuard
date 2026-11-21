@@ -245,9 +245,10 @@ class TestBaselineDiffDepAutofixAndMCP(unittest.TestCase):
         list_resp = handle_jsonrpc_request({"jsonrpc": "2.0", "id": 2, "method": "tools/list", "params": {}})
         assert list_resp is not None
         tool_names = {t["name"] for t in list_resp["result"]["tools"]}
-        self.assertEqual(
-            tool_names,
-            {"audit_repository", "audit_code_snippet", "check_package_safety", "generate_pr_comment"},
+        self.assertTrue(
+            {"audit_repository", "audit_code_snippet", "check_package_safety", "generate_pr_comment"}.issubset(
+                tool_names
+            )
         )
 
         # check_package_safety catches typosquatting & slopsquatting

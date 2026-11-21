@@ -268,3 +268,27 @@
 - 新增 `tests/test_v21_dx_init_doctor_and_cli_json.py`（3 项综合测试），全量单测增至 **101 / 101 通过**；
 - `openguard doctor .` 实测 `OK=6 | WARN=1 | ERROR=0`（精准提示可补充本地 pre-commit 钩子）；
 - 自身审计：**100.0/100 (A+)**，**Quality Gate: PASSED**（74 文件 / 16,761 行）。
+
+---
+
+## Round #12 — 2026-11-22 07:28–07:36
+
+### 本轮重点对标产品与行业动态
+- **Snyk MCP Server / Semgrep Guardian MCP (2025–2026)**：面向 AI 编程助手（Claude Code / Cursor / Windsurf / Antigravity）的新一代安全 MCP 服务不再局限于“扫代码/查包”，还向 Agent 暴露**仓库安全态势自检（Posture）**与 **SBOM 合规质量评估**工具，使 AI 代理在提交前能自主核查仓库防线完整度与 NTIA/EU CRA SBOM 达标状态。
+- **OWASP Dependency-Track v5 (*Hyades*) + OpenSSF Scorecard + `sbomqs` 仪表盘 UX**：现代供应链安全工作台强调将 **SBOM 质量分（NTIA 最小要素完整度）** 与 **仓库工程态势（Scorecard / Doctor Readiness）** 同屏呈现在工作台中，解决“有 SBOM 但质量不达标”的盲区。
+- **文档一致性巡检**：检查发现 `docs/INSTALLATION_AND_USAGE.md` 仍停留在早期 CLI 文档，尚未收录 `init` / `doctor` / `batch` / `sbom-diff` / `sbom-score` / `attest` / `mcp` 及 `--json` / `--audit-mode` / `--cache`。
+
+### 核心发现与已落地改进
+1. **MCP Server 升级至 6 项 AI 代理安全工具（`openguard/mcp_server.py`）**：
+   - 新增 `diagnose_repo_posture`（调用 7 项 Doctor 诊断，向 AI 代理返回仓库防线状态与一键修复指令）；
+   - 新增 `evaluate_sbom_quality`（支持直接传入仓库目录或 CycloneDX JSON 文件，返回 0–10.0 NTIA/CISA 合规评分、等级与 7 要素明细）。
+2. **Web 工作台 & REST API 安全态势与 NTIA SBOM 质量可视化（`openguard/web/app.py` + `index.html` + `app.js`）**：
+   - 新增 `GET /api/doctor?target=...` 与 `GET /api/sbom-quality/{scan_id}` REST 接口；
+   - Web 工作台总览页新增 **仓库安全态势与工具链自检（Doctor Posture）** 卡片，供应链 SBOM 页新增 **NTIA / CISA SBOM 质量评分与合规要素** 面板（全程经 `mountEscapedHtml` + `esc()` 安全渲染，零 XSS 风险），并同步修正空态文案（7 生态 → 10 生态）。
+3. **安装与使用文档全量更新（`docs/INSTALLATION_AND_USAGE.md`）**：
+   - 全面补齐 v1.3+ 全命令参考、Claude Code / Cursor `mcp.json` 一键配置示例与 Policy-as-Code 策略说明。
+
+### 验证结果
+- `node --check openguard/web/static/app.js` 语法零错误；
+- 新增 `tests/test_v22_mcp_posture_and_web_sbom_quality.py`（2 项端到端测试），全量单测增至 **103 / 103 通过**；
+- 自身审计：**100.0/100 (A+)**，**Quality Gate: PASSED**。

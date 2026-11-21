@@ -14,6 +14,7 @@ from pydantic import BaseModel
 from openguard import __version__
 from openguard.auditor import OpenGuardAuditor
 from openguard.config import AuditConfig, load_config
+from openguard.dx import run_doctor
 from openguard.remediation.dep_remediator import DependencyRemediator
 from openguard.remediation.doc_generator import DocGenerator
 from openguard.remediation.secret_remediator import SecretRemediator
@@ -23,6 +24,7 @@ from openguard.reporters.markdown_reporter import render_markdown_report, render
 from openguard.reporters.pdf_reporter import render_pdf_bytes
 from openguard.reporters.sarif_sbom_reporter import render_cyclonedx, render_sarif, render_spdx
 from openguard.reporters.slsa_provenance import render_slsa_provenance
+from openguard.sbom_tools import score_sbom_quality
 from openguard.scanners.secret_rules import build_builtin_secret_rules
 from openguard.utils.entropy import mask_secret
 from openguard.web.storage import AuditHistoryStore
@@ -292,6 +294,29 @@ def create_app(db_path: Optional[Path] = None) -> FastAPI:
             fpath.write_text("".join(lines), encoding="utf-8")
 
         return {"status": "inline_ignored", "file_path": req.file_path, "line_number": req.line_number}
+
+    @fastapi_app.get("/api/doctor")
+    def api_doctor(target: str) -> Dict[str, Any]:
+        target_path = Path(target).resolve()
+        if not target_path.exists():
+            raise HTTPException(status_code=404, detail=f"诊断目标路径不存在: {target}")
+        return run_doctor(target_path)
+
+    @fastapi_app.get("/api/sbom-quality/{scan_id}")
+    def api_sbom_quality(scan_id: str) -> Dict[str, Any]:
+        report = store.get_report(scan_id)
+        if not report:
+            raise HTTPException(status_code=404, detail=f"未找到扫描记录: {scan_id}")
+        cdx = render_cyclonedx(report)
+        qr = score_sbom_quality(cdx)
+        return {
+            "scan_id": scan_id,
+            "target_name": report.target_name,
+            "overall_score": qr.overall_score,
+            "grade": qr.grade,
+            "component_count": qr.component_count,
+            "checks": qr.checks,
+        }
 
     @fastapi_app.get("/api/export/{scan_id}/{fmt}")
     def export_scan(scan_id: str, fmt: str) -> Response:
