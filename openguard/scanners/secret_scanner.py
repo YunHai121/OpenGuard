@@ -467,6 +467,17 @@ class SecretScanner:
                 confidence -= 0.25
                 notes.append("penalized_example_domain")
 
+        # Stage 3b: Offline Cryptographic Checksum Verification (GitGuardian / GitHub CRC32)
+        if rule.checksum_verifier is not None:
+            if rule.checksum_verifier(matched_value):
+                confidence = max(confidence + 0.25, 0.96)
+                notes.append("verified_crc32_checksum")
+            elif ctx.in_test_scope or ctx.is_test_file or ctx.in_comment or ctx.in_docstring or ctx.is_doc_file:
+                confidence -= 0.35
+                notes.append("penalized_invalid_crc32_in_nonprod")
+            else:
+                notes.append("unverified_crc32_checksum")
+
         confidence = max(0.0, min(1.0, confidence))
         if confidence < self.config.min_confidence:
             notes.append(f"below_confidence_threshold:{confidence:.2f}")

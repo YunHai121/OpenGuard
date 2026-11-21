@@ -25,9 +25,31 @@
 - 自身审计：**100.0/100 (A+)**，**Quality Gate: PASSED**。
 
 ### 下一轮候选调研方向（待每小时逐步深化）
-- **TruffleHog v3 / Kingfisher / GitGuardian**：离线凭据格式校验（checksum/prefix/length，如 GitHub Fine-Grained PAT / AWS / Stripe / Slack / PyPI token CRC 校验）与低误报凭据分类；
+- ~~**TruffleHog v3 / Kingfisher / GitGuardian**：离线凭据格式校验~~（已在 Round #2 落地 GitHub/npm CRC32 校验与 GitLab Routable Token 适配）
+- ~~**AI Agent / LLM 供应链安全（2026 新赛道）**：Rules-File Backdoor / 隐蔽 Unicode / MCP 配置投毒检测~~（已在 Round #2 落地 `AIConfigSecurityScanner`）
 - **SLSA / Sigstore / Cosign / GitHub Artifact Attestations**：构建来源证明（Provenance）、SBOM 完整性签名校验与发布产物防篡改检查；
 - **OSV-SCALIBR / Syft / Grype**：更多生态（`go.sum`、`Gemfile.lock`、`composer.lock`、`.NET *.csproj / packages.lock.json`、GitHub Actions `uses` 纳入 SBOM 组件图）；
 - **SonarQube / CodeQL / Bandit / Semgrep Taint**：Python/JS 跨语句污点传播（Taint Tracking，区分常量字符串与外部用户输入，进一步压低 SAST 误报）；
-- **Web 工作台产品体验对标（Socket / Snyk / Dependency-Track）**：前端实时展示 Call-Graph 可达性徽章、VEX 状态筛选、CI/Dockerfile 分类视图与依赖一键升级面板；
-- **AI Agent / LLM 供应链安全（2026 新赛道）**：检测仓库内 `.cursorrules` / `CLAUDE.md` / `AGENTS.md` / MCP 配置中的 **Indirect Prompt Injection（隐蔽 Unicode 零宽字符/双向控制字符投毒、恶意外联指令）**（对标 2026 年爆发的 Rules-File Backdoor 攻击！）。
+- **Web 工作台产品体验对标（Socket / Snyk / Dependency-Track）**：前端实时展示 Call-Graph 可达性徽章、VEX 状态筛选、CI/Dockerfile/AI-Config 分类视图与依赖一键升级面板。
+
+---
+
+## Round #2 — 2026-11-21 21:28–21:33
+
+### 本轮重点对标产品与行业威胁
+- **Pillar Security / Johann Rehberger `aid` / OWASP MCP Top 10 / Invariant Labs `mcp-scan`**：2025–2026 爆发的 **Rules-File Backdoor**、**Unicode Tags (`U+E0000–U+E007F`) 不可见隐写（ASCII Smuggling）**、**Trojan Source 双向控制符（CVE-2021-42574）** 以及 **MCP STDIO 配置投毒 / Rug-Pull 攻击**。
+- **GitGuardian / TruffleHog / GitHub Secret Scanning**：基于 **CRC32 + Base62 离线密码学校验和** 消除非生产测试/文档中的伪造 `ghp_`/`gho_`/`npm_` 误报，以及修复现代多段式 **GitLab Routable Token**（含 `.01.` 分隔段）正则截断痛点。
+
+### 核心发现与已落地改进
+1. **新增 `AIConfigSecurityScanner`（`openguard/scanners/ai_config_scanner.py`）**，集成至 `OpenGuardAuditor.audit` 与 `audit_snippet`：
+   - `OG-AI-001` (CRITICAL, CWE-94)：检测不可见 Unicode Tag Block (`U+E0000–U+E007F`) 隐写，并自动解码输出隐藏 ASCII 载荷预览；
+   - `OG-AI-002` (HIGH, CWE-1007)：检测 Trojan Source 双向文本控制符（`U+202A–U+202E`、`U+2066–U+2069` 等）及 AI 规则文件中的高密度零宽字符簇；
+   - `OG-AI-003` (HIGH, CWE-77)：检测 `.cursorrules`、`.cursor/rules/*`、`CLAUDE.md`、`AGENTS.md`、`GEMINI.md`、`copilot-instructions.md` 中的隐蔽覆盖指令与 `.env`/`~/.ssh` 外联窃取提示词；
+   - `OG-AI-004` (CRITICAL/HIGH/MEDIUM, CWE-78/829/798)：检测 `.mcp.json` / `mcp.json` / `claude_desktop_config.json` 中的危险 Shell/管道命令执行、未锁定版本的 `npx -y` / `uvx` Rug-Pull 风险及 `env` 明文凭据硬编码。
+2. **离线密码学 CRC32 校验与多段式 GitLab Token 适配（`openguard/scanners/secret_rules.py` + `secret_scanner.py`）**：
+   - 实现 `validate_github_token_crc32`（`zlib.crc32` + 6 位 Base62 校验），挂载至 `OG-SEC-018`（GitHub PAT）、`OG-SEC-020`（GitHub OAuth/App）与 `OG-SEC-024`（npm Token）：校验通过直接提升置信度至 `>=0.96` 并标记 `verified_crc32_checksum`；非生产测试/文档中未通过 CRC32 的伪造 Token 自动降权过滤；
+   - 扩展 `OG-SEC-021` 支持 GitLab 17+ 多段式 Routable Token（`glpat-<payload>.<ver>.<crc>`），避免在 `.` 处截断。
+
+### 验证结果
+- 新增单元测试文件 `tests/test_v12_ai_and_checksum.py`（6 项核心测试），全量单测增至 **78 / 78 通过**；
+- 自身审计：**100.0/100 (A+)**，**Quality Gate: PASSED**（63 文件 / 13024 行，0 告警）。

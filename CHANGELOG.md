@@ -2,6 +2,12 @@
 
 All notable changes to **OpenGuard (开源卫士)** are documented in this file following [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and Semantic Versioning.
 
+## [Unreleased]
+
+### Added
+- **AI 供应链安全审计器 (`AIConfigSecurityScanner`)**：检测隐藏 Unicode Tag Block (`U+E0000–U+E007F`) 隐写并自动解码载荷预览（`OG-AI-001`）、Trojan Source 双向控制符与零宽字符混淆（`OG-AI-002`）、`.cursorrules`/`CLAUDE.md`/`AGENTS.md` 间接提示词注入后门（`OG-AI-003`）以及 `.mcp.json` 配置投毒与未锁版本 `npx`/`uvx` Rug-Pull 风险（`OG-AI-004`）。
+- **离线 CRC32 凭据校验与 GitLab Routable Token 支持**：新增 GitHub (`ghp_`/`gho_`/`ghu_`/`ghs_`/`ghr_`) 与 npm (`npm_`) Token 的 Base62 CRC32 离线校验（真实凭据置信度跃升并标记 `verified_crc32_checksum`，测试/文档中的伪造 Token 自动降噪过滤），并修复 GitLab 17+ 多段式 Routable Token（含 `.01.`）匹配截断问题。
+
 ## [1.2.0] - 2026-11-21
 
 ### Added

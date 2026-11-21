@@ -23,6 +23,7 @@ from openguard.reporters.html_reporter import render_html_report
 from openguard.reporters.markdown_reporter import render_markdown_report, render_pr_comment
 from openguard.reporters.pdf_reporter import render_pdf_bytes
 from openguard.reporters.sarif_sbom_reporter import render_cyclonedx, render_sarif, render_spdx
+from openguard.scanners.ai_config_scanner import AIConfigSecurityScanner
 from openguard.scanners.ci_workflow_scanner import CIWorkflowScanner
 from openguard.scanners.code_security_scanner import CodeSecurityScanner
 from openguard.scanners.dependency_parser import DependencyParser
@@ -150,11 +151,12 @@ class OpenGuardAuditor:
             exclude_patterns=cfg.exclude_patterns,
         )
 
-        # 6. Static Application Security Testing (SAST + CI/CD Workflow + Dockerfile)
+        # 6. Static Application Security Testing (SAST + CI/CD Workflow + Dockerfile + AI Config/Unicode)
         code_scanner = CodeSecurityScanner(cfg)
         code_findings = code_scanner.scan_directory(resolved)
         code_findings.extend(CIWorkflowScanner().scan_repository(resolved, exclude_patterns=cfg.exclude_patterns))
         code_findings.extend(DockerfileScanner().scan_repository(resolved, exclude_patterns=cfg.exclude_patterns))
+        code_findings.extend(AIConfigSecurityScanner().scan_repository(resolved, exclude_patterns=cfg.exclude_patterns))
 
         # Apply Diff-Aware filtering to SAST / CI / Docker & manifest findings when --diff is active
         if diff_added_map is not None:
@@ -242,6 +244,7 @@ class OpenGuardAuditor:
 
         sec_out = sec_scanner.scan_content(code, file_path=filename)
         sast_out = sast_scanner.scan_content(code, file_path=filename)
+        sast_out.extend(AIConfigSecurityScanner().scan_content(code, filename))
         duration_ms = (time.perf_counter() - t0) * 1000.0
 
         scorer = ScoringEngine(cfg.weights)

@@ -5,10 +5,13 @@ from __future__ import annotations
 import base64
 import json
 import re
+import zlib
 from dataclasses import dataclass
 from typing import Callable, List, Optional, Pattern
 
 from openguard.models import Severity
+
+_BASE62_ALPHABET = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz"
 
 
 @dataclass(frozen=True)
@@ -23,9 +26,38 @@ class SecretRule:
     min_entropy: float = 0.0
     requires_secret_context: bool = False
     validator: Optional[Callable[[str], bool]] = None
+    checksum_verifier: Optional[Callable[[str], bool]] = None
     remediation: str = "撤销泄露凭据并通过环境变量或密钥管理服务注入。"
     cwe_id: str = "CWE-798"
     extract_group: int = 0
+
+
+def _to_base62(num: int, width: int = 6) -> str:
+    if num == 0:
+        return "0" * width
+    chars: List[str] = []
+    n = num
+    while n > 0:
+        n, rem = divmod(n, 62)
+        chars.append(_BASE62_ALPHABET[rem])
+    return "".join(reversed(chars)).rjust(width, "0")
+
+
+def validate_github_token_crc32(token: str) -> bool:
+    """Offline CRC32 Base62 checksum validator for GitHub (ghp/gho/ghu/ghs/ghr) and npm (npm_) tokens.
+
+    Inspired by GitHub Secret Scanning & GitGuardian offline cryptographic verification:
+    Format is `<prefix>_<30-char-body><6-char-base62-crc32>`.
+    """
+    s = token.strip()
+    if "_" not in s:
+        return False
+    _, payload = s.split("_", 1)
+    if len(payload) != 36:
+        return False
+    body, expected_b62 = payload[:30], payload[30:]
+    crc = zlib.crc32(body.encode("ascii", errors="ignore")) & 0xFFFFFFFF
+    return _to_base62(crc, width=6) == expected_b62
 
 
 def validate_jwt(token: str) -> bool:
@@ -259,6 +291,7 @@ def build_builtin_secret_rules() -> List[SecretRule]:
             severity=Severity.CRITICAL,
             category_tag="scm",
             min_entropy=3.6,
+            checksum_verifier=validate_github_token_crc32,
             remediation="立即在 GitHub Developer Settings 中撤销该 PAT，并检查仓库异常活动。",
         ),
         SecretRule(
@@ -277,12 +310,13 @@ def build_builtin_secret_rules() -> List[SecretRule]:
             severity=Severity.CRITICAL,
             category_tag="scm",
             min_entropy=3.6,
+            checksum_verifier=validate_github_token_crc32,
             remediation="立即轮换 GitHub OAuth / App Token。",
         ),
         SecretRule(
             rule_id="OG-SEC-021",
             name="GitLab Personal Access Token",
-            pattern=re.compile(r"\b(glpat-[A-Za-z0-9\-_]{20,})\b"),
+            pattern=re.compile(r"\b(glpat-[A-Za-z0-9\-_]{20,}(?:\.[A-Za-z0-9\-_]+)*)\b"),
             severity=Severity.CRITICAL,
             category_tag="scm",
             min_entropy=3.3,
@@ -316,6 +350,7 @@ def build_builtin_secret_rules() -> List[SecretRule]:
             severity=Severity.CRITICAL,
             category_tag="scm",
             min_entropy=3.6,
+            checksum_verifier=validate_github_token_crc32,
             remediation="立即在 npmjs.com 吊销该 Access Token。",
         ),
         SecretRule(
