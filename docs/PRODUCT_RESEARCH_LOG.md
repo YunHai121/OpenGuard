@@ -244,3 +244,27 @@
 ### 验证结果
 - 新增 `tests/test_v20_sbom_diff_ntia_and_cves.py`（3 项专项测试），全量单测增至 **98 / 98 通过**；
 - 自身审计：**100.0/100 (A+)**，**Quality Gate: PASSED**；OpenGuard 自生成 CycloneDX SBOM 通过 NTIA 质量评分验证（≥ 8.0 / 10.0）。
+
+---
+
+## Round #11 — 2026-11-22 06:28–06:36
+
+### 本轮重点对标产品与行业动态
+- **Biome / Ruff / Snyk / Homebrew CLI 开发者体验（DX）范式**：现代高口碑安全与代码分析 CLI 普遍强调“零摩擦冷启动（Auto-Discovery `init`）”与“主动式自检体检（`doctor`）”，能在首次接入时自动探测多语言技术栈并幂等生成配置，同时通过带可复制修复指令的 `doctor` 诊断解决环境/配置/钩子排错痛点。
+- **Trivy / Semgrep / Snyk 机器可读 CLI 契约（Structured Output & Multi-Tier Exit Codes）**：CI/CD 与自动化脚本消费安全工具输出时，最忌讳 `--json` 模式下混入 Rich 装饰横幅导致 `jq` 解析崩溃，以及退出码不区分“发现安全问题（1）”“用户输入/路径错误（2）”“运行时异常（3）”，且老项目渐进接入普遍需要非阻塞观察模式 `--audit-mode`。
+- **架构文档同步性自检**：对照仓库源码发现 `docs/ARCHITECTURE.md` 仍停留在 v1.1 描述（仅列 7 生态），亟需同步至 v1.3+ 完整技术全貌。
+
+### 核心发现与已落地改进
+1. **零摩擦仓库初始化与主动环境体检引擎（`openguard/dx.py` + `openguard init` / `openguard doctor`）**：
+   - `detect_repo_stack` + `init_repository`：自动扫描目标仓库清单文件（PyPI/npm/Go/Cargo/Maven/NuGet/RubyGems/Composer/Docker/IaC/GitHub Actions/AI Rules）与主许可证，幂等生成定制化 `.openguard.yml`、`.openguardignore` 与 `.openguard/rules/starter_policy.yml`（默认不覆盖已有文件，支持 `--force` 与 `--json`）；
+   - `run_doctor`：执行 7 项端到端安全就绪度体检（`OG-DOC-01` Python 版本、`OG-DOC-02` Git 工具链与仓库、`OG-DOC-03` `.openguard.yml` 语法校验、`OG-DOC-04` Pre-commit 防线、`OG-DOC-05` CI/CD 与 Dependabot/CODEOWNERS、`OG-DOC-06` MCP Server 工具注册就绪度、`OG-DOC-07` 自定义策略 YAML 与生态清单），每项均附 `OK/WARN/ERROR` 状态与一键修复指令。
+2. **机器可读 CLI 契约升级（`openguard/cli.py`）**：
+   - `openguard scan` 新增 `--json`（向 `stdout` 输出纯净 JSON 报告，所有提示与错误严格分流至 `stderr`，可直接管道 `| jq`）与 `--audit-mode`（命中 `--fail-on` 仍返回 `0`，适配老项目灰度接入 CI）；
+   - 建立标准 4 级退出码约定：`0` 通过/观察模式、`1` 触发安全门禁阈值、`2` 用户输入/路径/无效参数错误、`3` 运行时异常。
+3. **系统架构文档全量对齐（`docs/ARCHITECTURE.md`）**：
+   - 同步更新架构图与核心算法章节至 v1.3+（覆盖 10 生态 SBOM、7 语言 SAST + Python/JS 污点分析、Base62 CRC32、CISA KEV/EPSS、Call-Graph VEX、AI Rules/Unicode/MCP 防线、IaC、Policy-as-Code、SLSA v1.0、增量缓存、MCP Server、多仓 `batch`、`sbom-diff/sbom-score` 及 `init/doctor`）。
+
+### 验证结果
+- 新增 `tests/test_v21_dx_init_doctor_and_cli_json.py`（3 项综合测试），全量单测增至 **101 / 101 通过**；
+- `openguard doctor .` 实测 `OK=6 | WARN=1 | ERROR=0`（精准提示可补充本地 pre-commit 钩子）；
+- 自身审计：**100.0/100 (A+)**，**Quality Gate: PASSED**（74 文件 / 16,761 行）。

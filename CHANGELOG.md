@@ -5,6 +5,7 @@ All notable changes to **OpenGuard (开源卫士)** are documented in this file 
 ## [Unreleased]
 
 ### Added
+- **开发者体验与 CLI 机器可读契约升级 (`dx.py` + `openguard init` / `openguard doctor` / `scan --json --audit-mode`)**：对标 Biome / Ruff / Snyk / Trivy，新增自动技术栈探测与幂等仓库初始化（`openguard init`）、7 项环境与供应链就绪度诊断（`openguard doctor`）、纯净 stdout JSON 输出（`--json`，错误/通知分流 stderr）、非阻塞观察模式（`--audit-mode`）以及标准 `0/1/2/3` 分级退出码协议；同步刷新 `docs/ARCHITECTURE.md` 至 v1.3+ 全景架构。
 - **SBOM Diff 供应链漂移检测 & NTIA 质量评分器 (`sbom_tools.py` + `openguard sbom-diff` / `openguard sbom-score`)**：对标 GitHub Dependency Review Action 与 `sbomqs`，支持对比两份 CycloneDX SBOM 的组件变更、Copyleft 许可证漂移与新增漏洞（`--fail-on-drift`），并依据 7 项 NTIA/CISA 最小要素对 SBOM 进行 0–10.0 质量打分（`--min-score`）。
 - **2025–2026 离线高危 CVE & CISA KEV 情报扩容**：新增 React RSC (`CVE-2025-55182`)、Next.js (`CVE-2025-66478`)、Brotli HTTP2Shell (`CVE-2026-111497`) 与 Axios (`CVE-2026-67313`/`CVE-2026-67319`) 检测及 KEV/EPSS 评分。
 - **7 语言系统级 SAST 扩展（对标 CodeQL / SpotBugs / Cppcheck / Clippy）**：新增 Java（`OG-SAST-JAVA-001`–`003`：反序列化/`Runtime.exec`/XXE）、C/C++（`OG-SAST-CPP-001`–`002`：`gets`/`strcpy`/`system`）与 Rust（`OG-SAST-RS-001`–`003`：`transmute`/Shell 命令/缺 `// SAFETY:` 的 `unsafe` 块）静态规则。

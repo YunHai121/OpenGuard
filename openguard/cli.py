@@ -14,9 +14,16 @@ from rich.panel import Panel
 from rich.table import Table
 
 from openguard import __version__
-from openguard.auditor import OpenGuardAuditor
+from openguard.auditor import OpenGuardAuditor, _is_remote_git_url
 from openguard.baseline import save_baseline
 from openguard.config import AuditConfig, load_config
+from openguard.dx import (
+    EXIT_POLICY_VIOLATION,
+    EXIT_RUNTIME_ERROR,
+    EXIT_USER_ERROR,
+    init_repository,
+    run_doctor,
+)
 from openguard.models import SEVERITY_ORDER, AuditReport, Severity
 from openguard.remediation.dep_remediator import DependencyRemediator
 from openguard.remediation.doc_generator import DocGenerator
@@ -37,6 +44,7 @@ app = typer.Typer(
     add_completion=False,
 )
 console = Console()
+err_console = Console(stderr=True)
 
 
 def _grade_color(grade: str) -> str:
@@ -170,45 +178,87 @@ def scan(
     license_override: Optional[str] = typer.Option(None, "--license", help="手动覆盖项目主 SPDX 许可证（如 MIT / Apache-2.0）"),
     fmt: Optional[str] = typer.Option(None, "--format", help="导出格式: html|pdf|json|sarif|md|pr-comment|cyclonedx|spdx|slsa|badge|all"),
     output: Optional[Path] = typer.Option(None, "--output", "-o", help="导出文件路径或目录（--format all 时为目录）"),
+    json_output: bool = typer.Option(False, "--json", help="向 stdout 输出纯净 JSON 报告（静默所有 Rich 装饰，便于 jq/CI 管道消费）"),
+    audit_mode: bool = typer.Option(False, "--audit-mode", help="非阻塞观察模式（即使触发 --fail-on 仍返回退出码 0，适合老项目渐进式接入 CI）"),
     fail_on: str = typer.Option("none", "--fail-on", help="门禁退出阈值: critical|high|medium|low|none"),
     config_file: Optional[Path] = typer.Option(None, "--config", "-c", help="自定义 .openguard.yml 配置文件路径"),
 ) -> None:
-    """对代码仓执行全维度敏感信息、供应链漏洞、许可证合规与工程规范审计。"""
+    """对代码仓执行全维度敏感信息、供应链漏洞、许可证合规与工程规范审计。
+
+    退出码约定: 0=通过/观察模式, 1=触发安全门禁阈值, 2=用户输入/路径/配置错误, 3=运行时异常。
+    """
+    thr_key = fail_on.upper().strip()
+    if thr_key not in ("NONE", "") and thr_key not in Severity.__members__:
+        err_console.print(f"[bold red]无效的 --fail-on 阈值:[/bold red] {fail_on}（可选: critical|high|medium|low|none）")
+        raise typer.Exit(code=EXIT_USER_ERROR)
+
+    if config_file is not None and not config_file.is_file():
+        err_console.print(f"[bold red]指定的配置文件不存在:[/bold red] {config_file}")
+        raise typer.Exit(code=EXIT_USER_ERROR)
+
+    is_remote = _is_remote_git_url(target)
     target_path = Path(target)
-    if target_path.exists():
-        root = target_path.parent if target_path.is_file() else target_path
-        cfg = load_config(root, config_path=config_file)
+    if not is_remote and not target_path.exists():
+        err_console.print(f"[bold red]审计目标路径不存在:[/bold red] {target}")
+        raise typer.Exit(code=EXIT_USER_ERROR)
+
+    try:
+        if target_path.exists():
+            root = target_path.parent if target_path.is_file() else target_path
+            cfg = load_config(root, config_path=config_file)
+        else:
+            cfg = AuditConfig()
+
+        cfg.include_git_history = git_history or cfg.include_git_history
+        cfg.max_git_commits = max_commits
+        cfg.staged_only = staged
+        if diff:
+            cfg.diff_ref = diff
+        if baseline:
+            cfg.baseline_path = str(baseline)
+        if cache:
+            cfg.use_cache = True
+        cfg.offline = offline or cfg.offline
+        if license_override:
+            cfg.project_license_override = license_override
+
+        auditor = OpenGuardAuditor(cfg)
+        report = auditor.audit(target, config_path=config_file)
+    except FileNotFoundError as exc:
+        err_console.print(f"[bold red]输入路径错误:[/bold red] {exc}")
+        raise typer.Exit(code=EXIT_USER_ERROR)
+    except ValueError as exc:
+        err_console.print(f"[bold red]配置或参数校验失败:[/bold red] {exc}")
+        raise typer.Exit(code=EXIT_USER_ERROR)
+    except Exception as exc:
+        err_console.print(f"[bold red]审计运行时异常:[/bold red] {exc}")
+        raise typer.Exit(code=EXIT_RUNTIME_ERROR)
+
+    if json_output:
+        sys.stdout.write(report.model_dump_json(indent=2) + "\n")
+        sys.stdout.flush()
     else:
-        cfg = AuditConfig()
-
-    cfg.include_git_history = git_history or cfg.include_git_history
-    cfg.max_git_commits = max_commits
-    cfg.staged_only = staged
-    if diff:
-        cfg.diff_ref = diff
-    if baseline:
-        cfg.baseline_path = str(baseline)
-    if cache:
-        cfg.use_cache = True
-    cfg.offline = offline or cfg.offline
-    if license_override:
-        cfg.project_license_override = license_override
-
-    auditor = OpenGuardAuditor(cfg)
-    report = auditor.audit(target, config_path=config_file)
-    _print_report_summary(report)
+        _print_report_summary(report)
 
     if fmt:
         default_out = output or Path(
             "openguard_reports" if fmt.lower() == "all" else f"openguard_report.{fmt.lower()}"
         )
         written = auditor.export_report(report, fmt, default_out)
+        notice_console = err_console if json_output else console
         for wp in written:
-            console.print(f"[green]已导出报告:[/green] {wp}")
+            notice_console.print(f"[green]已导出报告:[/green] {wp}")
 
     if _check_fail_threshold(report, fail_on):
-        console.print(f"[bold red]触发安全门禁阈值 (--fail-on {fail_on})，返回非零退出码。[/bold red]")
-        raise typer.Exit(code=1)
+        if audit_mode:
+            if not json_output:
+                console.print(
+                    f"[bold yellow]已命中 --fail-on {fail_on} 阈值，但当前处于 --audit-mode 观察模式，返回退出码 0。[/bold yellow]"
+                )
+        else:
+            notice_console = err_console if json_output else console
+            notice_console.print(f"[bold red]触发安全门禁阈值 (--fail-on {fail_on})，返回退出码 {EXIT_POLICY_VIOLATION}。[/bold red]")
+            raise typer.Exit(code=EXIT_POLICY_VIOLATION)
 
 
 @app.command()
@@ -534,6 +584,82 @@ def sbom_score(
     if min_score > 0 and qr.overall_score < min_score:
         console.print(f"[bold red]SBOM 质量分 {qr.overall_score:.2f} 低于门槛 {min_score:.2f}[/bold red]")
         raise typer.Exit(code=1)
+
+
+@app.command()
+def init(
+    target: Path = typer.Argument(".", help="待初始化 OpenGuard 配置的目标仓库目录"),
+    force: bool = typer.Option(False, "--force", help="强制覆盖已存在的配置文件"),
+    json_output: bool = typer.Option(False, "--json", help="向 stdout 输出纯净 JSON 初始化结果"),
+) -> None:
+    """自动探测仓库技术栈与生态，幂等生成定制化 .openguard.yml、.openguardignore 与自定义策略模板。"""
+    try:
+        res = init_repository(target, force=force)
+    except FileNotFoundError as exc:
+        err_console.print(f"[bold red]{exc}[/bold red]")
+        raise typer.Exit(code=EXIT_USER_ERROR)
+
+    if json_output:
+        sys.stdout.write(json.dumps(res, indent=2, ensure_ascii=False) + "\n")
+        sys.stdout.flush()
+        return
+
+    stack = res["stack"]
+    ecos = ", ".join(stack["ecosystems"]) if stack["ecosystems"] else "未探测到特定包生态（通用源码模式）"
+    console.print(
+        Panel(
+            f"[bold]目标仓库:[/bold] {res['repo_root']}\n"
+            f"[bold]自动探测生态:[/bold] {ecos}\n"
+            f"[bold]主许可证:[/bold] {stack['project_license']}",
+            title="OpenGuard 零摩擦仓库初始化 (init)",
+            border_style="cyan",
+        )
+    )
+    tbl = Table(show_header=True)
+    tbl.add_column("配置文件")
+    tbl.add_column("状态")
+    for rel_path, status in res["files"].items():
+        st_fmt = f"[green]{status}[/green]" if status in ("created", "overwritten") else f"[yellow]{status}[/yellow]"
+        tbl.add_row(rel_path, st_fmt)
+    console.print(tbl)
+    console.print("[dim]下一步建议: 运行 `openguard doctor .` 体检环境，或执行 `openguard scan . --offline --cache` 开始首次审计。[/dim]")
+
+
+@app.command()
+def doctor(
+    target: Path = typer.Argument(".", help="待执行环境与供应链安全就绪度体检的仓库目录"),
+    json_output: bool = typer.Option(False, "--json", help="向 stdout 输出纯净 JSON 诊断结果"),
+) -> None:
+    """全面诊断运行环境、Git/Pre-commit/CI 安全防线、配置文件与 MCP Server 就绪状态。"""
+    try:
+        res = run_doctor(target)
+    except FileNotFoundError as exc:
+        err_console.print(f"[bold red]{exc}[/bold red]")
+        raise typer.Exit(code=EXIT_USER_ERROR)
+
+    if json_output:
+        sys.stdout.write(json.dumps(res, indent=2, ensure_ascii=False) + "\n")
+        sys.stdout.flush()
+    else:
+        st_color = "bold green" if res["status"] == "HEALTHY" else ("bold yellow" if res["status"] == "DEGRADED" else "bold red")
+        tbl = Table(
+            title=f"OpenGuard 环境与安全就绪度诊断 [{st_color}]{res['status']}[/{st_color}] "
+            f"(OK={res['ok_count']} | WARN={res['warn_count']} | ERROR={res['error_count']})",
+            show_header=True,
+        )
+        tbl.add_column("编号")
+        tbl.add_column("检查项")
+        tbl.add_column("状态")
+        tbl.add_column("详情")
+        tbl.add_column("修复建议")
+        for c in res["checks"]:
+            st = c["status"]
+            st_badge = "[green]OK[/green]" if st == "OK" else ("[yellow]WARN[/yellow]" if st == "WARN" else "[bold red]ERROR[/bold red]")
+            tbl.add_row(c["id"], c["name"], st_badge, c["details"], c["fix_hint"] or "-")
+        console.print(tbl)
+
+    if not res["healthy"]:
+        raise typer.Exit(code=EXIT_POLICY_VIOLATION)
 
 
 @app.command()
