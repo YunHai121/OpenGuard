@@ -5,6 +5,8 @@ All notable changes to **OpenGuard (开源卫士)** are documented in this file 
 ## [Unreleased]
 
 ### Added
+- **7 语言系统级 SAST 扩展（对标 CodeQL / SpotBugs / Cppcheck / Clippy）**：新增 Java（`OG-SAST-JAVA-001`–`003`：反序列化/`Runtime.exec`/XXE）、C/C++（`OG-SAST-CPP-001`–`002`：`gets`/`strcpy`/`system`）与 Rust（`OG-SAST-RS-001`–`003`：`transmute`/Shell 命令/缺 `// SAFETY:` 的 `unsafe` 块）静态规则。
+- **组织/竞赛级多仓组合审计与 JSONL 流式输出 (`PortfolioAuditor` + `openguard batch`)**：一键批量扫描目录下多个仓库，支持流式 JSONL 导出（`--jsonl-out`）、Portfolio 排行榜 Markdown（`--md-out`）与 `--fail-on-gate` 门禁。
 - **JavaScript / TypeScript 跨语句污点分析引擎 (`JSTaintAnalyzer`)**：对标 Semgrep JS / CodeQL，追踪 Express/Next.js/Node.js 外部输入与对象解构变量流入 `child_process.exec`（`OG-TAINT-JS-001`）、XSS（`OG-TAINT-JS-002`）、SSRF（`OG-TAINT-JS-003`）、`fs` 路径穿越（`OG-TAINT-JS-004`）与原型链污染（`OG-TAINT-JS-005`），自动识别常见净化器与守卫。
 - **基于 SHA-256 内容哈希的增量文件扫描缓存 (`IncrementalScanCache` + `--cache`)**：对标 Ruff `.ruff_cache` / ESLint `--cache`，采用 `文件内容 + 配置指纹 + 工具版本` 复合键跳过未变更文件并保证零脏缓存。
 

@@ -434,6 +434,58 @@ def benchmark(
 
 
 @app.command()
+def batch(
+    parent_dir: Path = typer.Argument(..., help="包含多个子仓库的父目录路径"),
+    offline: bool = typer.Option(True, "--offline/--online", help="是否使用离线高速模式"),
+    cache: bool = typer.Option(False, "--cache", help="启用每文件 SHA-256 增量扫描缓存"),
+    jsonl_out: Optional[Path] = typer.Option(None, "--jsonl-out", help="流式导出 JSONL 汇总结果路径（适配 SIEM/BI）"),
+    md_out: Optional[Path] = typer.Option(None, "--md-out", help="导出多仓组合 Markdown 排行榜报告路径"),
+    fail_on_gate: bool = typer.Option(False, "--fail-on-gate", help="若有任意仓库 Quality Gate 失败则返回非零退出码"),
+) -> None:
+    """组织级/竞赛评审级批量多仓审计：一键扫描目录下所有子项目并输出汇总矩阵与 JSONL 流。"""
+    from openguard.portfolio import PortfolioAuditor, discover_child_repositories
+
+    repos = discover_child_repositories(parent_dir)
+    if not repos:
+        console.print(f"[yellow]未在 {parent_dir} 下发现可审计的子项目目录。[/yellow]")
+        return
+
+    res = PortfolioAuditor().audit_repositories(
+        repos,
+        offline=offline,
+        use_cache=cache,
+        jsonl_out=jsonl_out,
+        md_out=md_out,
+    )
+    tbl = Table(title=f"OpenGuard 多仓组合审计汇总 ({res.total_repos} 个仓库 | 平均 {res.average_score:.1f} 分)", show_header=True)
+    tbl.add_column("仓库")
+    tbl.add_column("得分/等级", justify="right")
+    tbl.add_column("门禁")
+    tbl.add_column("密钥", justify="right")
+    tbl.add_column("P0/KEV", justify="right")
+    tbl.add_column("许可证冲突", justify="right")
+    tbl.add_column("SAST/配置", justify="right")
+    for r in res.repos:
+        gate_fmt = "[green]PASSED[/green]" if r.quality_gate == "PASSED" else f"[red]{r.quality_gate}[/red]"
+        tbl.add_row(
+            r.repo_name,
+            f"{r.total_score:.1f} ({r.grade})",
+            gate_fmt,
+            str(r.secrets_count),
+            f"{r.p0_vulns_count}/{r.kev_vulns_count}",
+            str(r.license_conflicts_count),
+            str(r.code_security_count),
+        )
+    console.print(tbl)
+    if jsonl_out:
+        console.print(f"[green]已导出 JSONL 流式结果:[/green] {jsonl_out}")
+    if md_out:
+        console.print(f"[green]已导出 Portfolio Markdown 报告:[/green] {md_out}")
+    if fail_on_gate and res.failed_gates > 0:
+        raise typer.Exit(code=1)
+
+
+@app.command()
 def version() -> None:
     """输出当前 OpenGuard 版本信息。"""
     console.print(f"OpenGuard (开源卫士) v{__version__}")

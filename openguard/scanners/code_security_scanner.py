@@ -66,7 +66,10 @@ class CodeSecurityScanner:
                 rel = fpath.relative_to(root).as_posix()
                 if is_path_excluded(rel, self.config.exclude_patterns):
                     continue
-                if fpath.suffix.lower() in (".py", ".js", ".ts", ".jsx", ".tsx", ".sh", ".go"):
+                if fpath.suffix.lower() in (
+                    ".py", ".js", ".ts", ".jsx", ".tsx", ".sh", ".go",
+                    ".java", ".c", ".cc", ".cpp", ".cxx", ".h", ".hpp", ".rs",
+                ):
                     target_files.append(fpath)
 
         cache = None
@@ -124,6 +127,12 @@ class CodeSecurityScanner:
             return self._scan_shell_patterns(content, file_path)
         if ext == ".go":
             return self._scan_go_patterns(content, file_path)
+        if ext == ".java":
+            return self._scan_java_patterns(content, file_path)
+        if ext in (".c", ".cc", ".cpp", ".cxx", ".h", ".hpp"):
+            return self._scan_cpp_patterns(content, file_path)
+        if ext == ".rs":
+            return self._scan_rust_patterns(content, file_path)
         return []
 
     def _scan_python_ast(self, content: str, file_path: str) -> List[CodeSecurityFinding]:
@@ -456,4 +465,146 @@ class CodeSecurityScanner:
                         remediation="改用 `crypto/sha256` 或 `golang.org/x/crypto/argon2`。",
                     )
                 )
+        return findings
+
+    def _scan_java_patterns(self, content: str, file_path: str) -> List[CodeSecurityFinding]:
+        findings: List[CodeSecurityFinding] = []
+        has_xxe_guard = "disallow-doctype-decl" in content.lower() or "external-general-entities" in content.lower()
+        for idx, line in enumerate(content.splitlines(), start=1):
+            stripped = line.strip()
+            if not stripped or stripped.startswith(("//", "/*", "*")) or "openguard: ignore" in stripped.lower():
+                continue
+            if re.search(r"\bObjectInputStream\b|\.\s*readObject\s*\(", line):
+                findings.append(
+                    CodeSecurityFinding(
+                        rule_id="OG-SAST-JAVA-001",
+                        rule_name="Unsafe Java Native Deserialization (ObjectInputStream.readObject)",
+                        cwe_id="CWE-502",
+                        severity=Severity.CRITICAL,
+                        file_path=file_path,
+                        line_number=idx,
+                        snippet=stripped[:180],
+                        description="使用 Java 原生反序列化 `ObjectInputStream.readObject()` 解析不可信字节流可能触发 Gadget Chain 远程代码执行。",
+                        remediation="改用 JSON/Protobuf 等安全格式，或通过 `ObjectInputFilter` / `resolveClass` 严格白名单限制反序列化类。",
+                    )
+                )
+            if re.search(r"Runtime\.getRuntime\(\)\.exec\s*\(", line):
+                findings.append(
+                    CodeSecurityFinding(
+                        rule_id="OG-SAST-JAVA-002",
+                        rule_name="Java OS Command Execution Risk (Runtime.exec)",
+                        cwe_id="CWE-78",
+                        severity=Severity.HIGH,
+                        file_path=file_path,
+                        line_number=idx,
+                        snippet=stripped[:180],
+                        description="调用 `Runtime.getRuntime().exec()` 执行系统命令，若拼接外部输入易导致命令注入。",
+                        remediation="改用 `ProcessBuilder` 并以参数数组传参，同时对外部参数做严格白名单校验。",
+                    )
+                )
+            if not has_xxe_guard and re.search(r"\b(?:DocumentBuilderFactory|SAXParserFactory|XMLInputFactory)\.newInstance\s*\(", line):
+                findings.append(
+                    CodeSecurityFinding(
+                        rule_id="OG-SAST-JAVA-003",
+                        rule_name="Java XML External Entity Injection Risk (XXE)",
+                        cwe_id="CWE-611",
+                        severity=Severity.HIGH,
+                        file_path=file_path,
+                        line_number=idx,
+                        snippet=stripped[:180],
+                        description="创建 XML 解析器实例未禁用外部实体/DTD (`disallow-doctype-decl`)，存在 XXE 文件读取与 SSRF 风险。",
+                        remediation="显式调用 `setFeature(\"http://apache.org/xml/features/disallow-doctype-decl\", true)` 禁用 DTD。",
+                    )
+                )
+        return findings
+
+    def _scan_cpp_patterns(self, content: str, file_path: str) -> List[CodeSecurityFinding]:
+        findings: List[CodeSecurityFinding] = []
+        for idx, line in enumerate(content.splitlines(), start=1):
+            stripped = line.strip()
+            if not stripped or stripped.startswith(("//", "/*", "*")) or "openguard: ignore" in stripped.lower():
+                continue
+            m_buf = re.search(r"\b(gets|strcpy|strcat|sprintf|vsprintf)\s*\(", line)
+            if m_buf:
+                fn = m_buf.group(1)
+                findings.append(
+                    CodeSecurityFinding(
+                        rule_id="OG-SAST-CPP-001",
+                        rule_name=f"C/C++ Unbounded Buffer Copy/Input ({fn})",
+                        cwe_id="CWE-120",
+                        severity=Severity.CRITICAL if fn == "gets" else Severity.HIGH,
+                        file_path=file_path,
+                        line_number=idx,
+                        snippet=stripped[:180],
+                        description=f"调用无长度边界检查的 C/C++ 函数 `{fn}()`，极易触发栈/堆缓冲区溢出漏洞。",
+                        remediation="替换为带显式缓冲区长度上限的安全版本：`fgets()`、`snprintf()`、`strncpy()` 或 `std::string`。",
+                    )
+                )
+            if re.search(r"\b(?:std::)?(?:system|popen)\s*\(", line):
+                findings.append(
+                    CodeSecurityFinding(
+                        rule_id="OG-SAST-CPP-002",
+                        rule_name="C/C++ OS Shell Command Execution (system/popen)",
+                        cwe_id="CWE-78",
+                        severity=Severity.HIGH,
+                        file_path=file_path,
+                        line_number=idx,
+                        snippet=stripped[:180],
+                        description="调用 `system()`/`popen()` 通过 Shell 执行命令，存在命令注入风险。",
+                        remediation="使用 `execve()`/`posix_spawn()` 直接传递参数数组以隔离 Shell 解析。",
+                    )
+                )
+        return findings
+
+    def _scan_rust_patterns(self, content: str, file_path: str) -> List[CodeSecurityFinding]:
+        findings: List[CodeSecurityFinding] = []
+        lines = content.splitlines()
+        for idx, line in enumerate(lines, start=1):
+            stripped = line.strip()
+            if not stripped or stripped.startswith(("//", "/*", "*")) or "openguard: ignore" in stripped.lower():
+                continue
+            if re.search(r"\b(?:std::mem::|core::mem::|mem::)?transmute\b", line):
+                findings.append(
+                    CodeSecurityFinding(
+                        rule_id="OG-SAST-RS-001",
+                        rule_name="Rust Unsafe Type Reinterpretation (mem::transmute)",
+                        cwe_id="CWE-704",
+                        severity=Severity.HIGH,
+                        file_path=file_path,
+                        line_number=idx,
+                        snippet=stripped[:180],
+                        description="使用 `mem::transmute` 强行按位重解释类型，极易引发未定义行为 (UB) 与内存安全破坏。",
+                        remediation="优先使用安全的 `From`/`Into`、`TryFrom`、`bytemuck` 或 `to_ne_bytes`/`from_ne_bytes` 转换。",
+                    )
+                )
+            if re.search(r'Command::new\s*\(\s*"(?:sh|bash|cmd)"\s*\)', line):
+                findings.append(
+                    CodeSecurityFinding(
+                        rule_id="OG-SAST-RS-002",
+                        rule_name="Rust Shell Command Execution Risk",
+                        cwe_id="CWE-78",
+                        severity=Severity.HIGH,
+                        file_path=file_path,
+                        line_number=idx,
+                        snippet=stripped[:180],
+                        description="通过 `Command::new(\"sh\"/\"bash\")` 调起 Shell 解释器执行命令，存在命令注入风险。",
+                        remediation="直接将目标程序传入 `Command::new(bin).args([...])` 避免 Shell 解析。",
+                    )
+                )
+            if re.search(r"\bunsafe\s*\{", line):
+                prev_line = lines[idx - 2].strip() if idx >= 2 else ""
+                if "SAFETY:" not in prev_line and "SAFETY:" not in line:
+                    findings.append(
+                        CodeSecurityFinding(
+                            rule_id="OG-SAST-RS-003",
+                            rule_name="Undocumented Rust unsafe Block (Missing // SAFETY: Invariant)",
+                            cwe_id="CWE-119",
+                            severity=Severity.MEDIUM,
+                            file_path=file_path,
+                            line_number=idx,
+                            snippet=stripped[:180],
+                            description="`unsafe { ... }` 块上方缺少 `// SAFETY:` 不变量说明（对标 `clippy::undocumented_unsafe_blocks`）。",
+                            remediation="在 `unsafe` 块前补充 `// SAFETY: ...` 明确说明为何满足内存与生命周期不变量，或消除不必要的 `unsafe`。",
+                        )
+                    )
         return findings

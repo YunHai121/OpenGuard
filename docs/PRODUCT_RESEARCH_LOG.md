@@ -42,11 +42,13 @@
   - ~~**多进程/线程池并发扫描加速**~~（已在 Round #7 落地 `ThreadPoolExecutor` 自适应并发扫描）
   - ~~**版本发布整理 (`v1.3.0`)**~~（已在 Round #7 打标发布 `v1.3.0`）
 - **v1.4.0 下一阶段候选调研方向**：
-  - **GitHub / GitLab / Gitee 真实开源仓库压测与误报微调**：在真实开源项目上批量实测 OpenGuard v1.3.0，收集边缘语法/误报案例反哺规则精度；
+  - **GitHub / GitLab / Gitee 真实开源仓库压测与误报微调**：在真实开源项目上批量实测 OpenGuard v1.3+，收集边缘语法/误报案例反哺规则精度；
   - ~~**JavaScript / TypeScript 跨语句污点分析（对标 Semgrep JS / CodeQL）**~~（已在 Round #8 落地 `JSTaintAnalyzer`：`OG-TAINT-JS-001`–`005`）
   - ~~**增量文件哈希缓存（对标 Ruff `.ruff_cache` / ESLint `--cache` / Semgrep）**~~（已在 Round #8 落地 `IncrementalScanCache` + `--cache`）
-  - **Rust / Java / C++ SAST 扩展（`unsafe` 审计、`Runtime.getRuntime().exec`、`strcpy`/`sprintf`）**；
-  - **OpenTelemetry / JSONL 流式结构化日志与批量多仓组合审计（Portfolio / Org-Level Audit）**。
+  - ~~**Rust / Java / C++ SAST 扩展（对标 CodeQL / SpotBugs / Cppcheck / Clippy）**~~（已在 Round #9 落地 7 语言 SAST 覆盖）
+  - ~~**组织级批量多仓组合审计与 JSONL 流式输出（对标 Snyk Org / Dependency-Track Portfolio）**~~（已在 Round #9 落地 `PortfolioAuditor` 与 `openguard batch`）
+  - **SBOM Diff / 依赖变更漂移对比（对标 Syft / CycloneDX CLI / Dependency Review Action）**：对比两个版本/分支之间的新增/升级/移除组件与许可证变化，专用于 PR 供应链审查；
+  - **跨生态 OSV 离线漏洞库扩容与 CVSS v4.0 支持**：覆盖 2025–2026 高频 PyPI / npm / Go / Maven / Rust 新 CVE。
 
 ---
 
@@ -200,4 +202,24 @@
 
 ### 验证结果
 - 新增 `tests/test_v18_js_taint_and_cache.py`（3 项专项测试），全量单测增至 **92 / 92 通过**；
+- 自身审计：**100.0/100 (A+)**，**Quality Gate: PASSED**。
+
+---
+
+## Round #9 — 2026-11-22 04:28–04:34
+
+### 本轮重点对标产品
+- **CodeQL / SpotBugs (FindSecBugs) / Cppcheck / Rust Clippy**：跨语言系统级 SAST 核心缺陷模式——Java 原生反序列化（`ObjectInputStream.readObject`）、`Runtime.exec` 与 XXE；C/C++ 无边界内存拷贝（`gets`/`strcpy`/`strcat`/`sprintf`）与 `system()`；Rust `mem::transmute`、Shell 命令注入与缺少 `// SAFETY:` 注释的 `unsafe` 块（`clippy::undocumented_unsafe_blocks`）。
+- **Snyk Org Inventory / OWASP Dependency-Track Portfolio**：面向组织安全团队与竞赛评审场景的多仓库批量审计架构，通过流式 **JSONL (`.jsonl`)** 输出适配 SIEM/BI 数据管道，并生成按风险排序的 Portfolio 排行榜。
+
+### 核心发现与已落地改进
+1. **7 语言 SAST 扩展（`openguard/scanners/code_security_scanner.py`）**：
+   - **Java**：`OG-SAST-JAVA-001`（`ObjectInputStream` 反序列化）、`OG-SAST-JAVA-002`（`Runtime.exec`）、`OG-SAST-JAVA-003`（未禁用 DTD 的 XXE 风险）；
+   - **C / C++**：`OG-SAST-CPP-001`（`gets`/`strcpy`/`strcat`/`sprintf` 缓冲区溢出）、`OG-SAST-CPP-002`（`system`/`popen`）；
+   - **Rust**：`OG-SAST-RS-001`（`mem::transmute`）、`OG-SAST-RS-002`（`Command::new("sh")`）、`OG-SAST-RS-003`（未标注 `// SAFETY:` 的 `unsafe` 块）。
+2. **组织/竞赛级多仓批量审计与 JSONL 流式输出（`openguard/portfolio.py` + `openguard batch`）**：
+   - 自动发现目录下所有子项目并批量执行审计，边扫边写 **JSONL 流式日志**（`--jsonl-out`）并输出按门禁状态与评分排序的 **Portfolio Markdown 排行榜**（`--md-out`），支持 `--fail-on-gate` 门禁退出码。
+
+### 验证结果
+- 新增 `tests/test_v19_systems_sast_and_portfolio.py`（3 项专项测试），全量单测增至 **95 / 95 通过**；
 - 自身审计：**100.0/100 (A+)**，**Quality Gate: PASSED**。
