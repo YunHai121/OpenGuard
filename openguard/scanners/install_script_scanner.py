@@ -70,6 +70,8 @@ class InstallScriptScanner:
                 low = fname.lower()
                 if low == "package.json":
                     findings.extend(self._scan_package_json(fpath, rel))
+                elif low == "package-lock.json":
+                    findings.extend(self._scan_package_lock_integrity(fpath, rel))
                 elif low == "setup.py":
                     findings.extend(self._scan_setup_py(fpath, rel))
         return findings
@@ -111,6 +113,79 @@ class InstallScriptScanner:
                         )
                     )
                     break
+        return findings
+
+    def _scan_package_lock_integrity(self, fpath: Path, rel: str) -> List[VulnerabilityFinding]:
+        """Audit `package-lock.json` for lockfile injection (http:// downgrade or missing/weak sha1 integrity)."""
+        try:
+            data = json.loads(fpath.read_text(encoding="utf-8", errors="replace"))
+        except Exception:
+            return []
+        packages = data.get("packages")
+        if not isinstance(packages, dict):
+            return []
+
+        findings: List[VulnerabilityFinding] = []
+        http_pkgs: List[str] = []
+        weak_int_pkgs: List[str] = []
+
+        for pkg_path, info in packages.items():
+            if not pkg_path or not isinstance(info, dict) or info.get("link"):
+                continue
+            resolved = str(info.get("resolved") or "").strip()
+            integrity = str(info.get("integrity") or "").strip()
+            name = pkg_path.split("node_modules/")[-1]
+
+            if resolved.lower().startswith("http://"):
+                http_pkgs.append(f"{name} ({resolved[:60]})")
+            elif resolved.lower().startswith("https://"):
+                if not integrity or integrity.lower().startswith("sha1-"):
+                    weak_int_pkgs.append(name)
+
+        if http_pkgs:
+            findings.append(
+                VulnerabilityFinding(
+                    id="OG-SUP-LOCK-001",
+                    component_name=rel,
+                    component_version="package-lock.json",
+                    ecosystem="npm",
+                    severity=Severity.CRITICAL,
+                    cvss_score=9.1,
+                    summary=f"锁文件 `{rel}` 包含明文 HTTP (`http://`) 包下载地址，存在中间人篡改与锁文件投毒风险：{', '.join(http_pkgs[:4])}。",
+                    fixed_version="切换为 HTTPS 官方源并重新生成 package-lock.json",
+                    source="install_script",
+                    source_file=rel,
+                    category=FindingCategory.SUPPLY_CHAIN_SCRIPT,
+                    remediation="核查并清除 `http://` 非加密依赖源，使用受信任 HTTPS 镜像源重新执行 `npm install --package-lock-only`。",
+                    reachable=True,
+                    reachability_level="call_reachable",
+                    priority_tier="P0",
+                    import_locations=[rel],
+                )
+            )
+
+        if weak_int_pkgs:
+            findings.append(
+                VulnerabilityFinding(
+                    id="OG-SUP-LOCK-002",
+                    component_name=rel,
+                    component_version="package-lock.json",
+                    ecosystem="npm",
+                    severity=Severity.HIGH,
+                    cvss_score=7.8,
+                    summary=f"锁文件 `{rel}` 中存在缺少 `sha512` 完整性校验或降级为弱 `sha1` 的远端依赖：{', '.join(weak_int_pkgs[:5])}。",
+                    fixed_version="使用 npm >= 8 重新生成带 sha512 integrity 的锁文件",
+                    source="install_script",
+                    source_file=rel,
+                    category=FindingCategory.SUPPLY_CHAIN_SCRIPT,
+                    remediation="重新生成包含 `sha512-...` 完整性哈希的 `package-lock.json`，并在 CI 中使用 `npm ci` 强制校验。",
+                    reachable=True,
+                    reachability_level="call_reachable",
+                    priority_tier="P1",
+                    import_locations=[rel],
+                )
+            )
+
         return findings
 
     def _scan_setup_py(self, fpath: Path, rel: str) -> List[VulnerabilityFinding]:

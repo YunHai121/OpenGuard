@@ -2,9 +2,11 @@
 
 All notable changes to **OpenGuard (开源卫士)** are documented in this file following [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and Semantic Versioning.
 
-## [Unreleased]
+## [1.3.0] - 2026-11-22
 
 ### Added
+- **锁文件防篡改/降级守卫 (`InstallScriptScanner`) & OpenSSF Scorecard 仓库卫生**：检测 `package-lock.json` 中明文 `http://` 源降级（`OG-SUP-LOCK-001`）及缺失/弱 `sha1` 完整性哈希（`OG-SUP-LOCK-002`）；本仓库新增 `.github/dependabot.yml` 与 `.github/CODEOWNERS` 对齐 OpenSSF Scorecard 最佳实践。
+- **自适应多线程并发扫描 (`ThreadPoolExecutor`)**：`SecretScanner` 与 `CodeSecurityScanner` 在文件数 ≥ 16 时自动启用线程池并发扫描（可通过 `.openguard.yml` `max_workers` 配置），兼顾大仓性能与结果确定性顺序。
 - **声明式 Policy-as-Code 与自定义 YAML 规则引擎 (`PolicyEngine`，对标 Semgrep / FOSSA / OPA)**：支持自动加载 `.openguard/rules/*.yml` 与 `.openguard.yml` 中的 `custom_sast_rules`，并支持声明式 `policy.denied_licenses`、`policy.allowed_licenses` 与 `policy.denied_packages` 合规门禁。
 - **HTML / PDF 离线报告同步升级**：HTML 报告新增 `[P0-P3]` KEV/EPSS/Call-Graph 徽章及 CI/Dockerfile/IaC/AI/污点/策略独立标签；中文 PDF 报告首屏新增 Quality Gate 门禁执行摘要表与优先级/可达性列。
 - **CISA KEV & EPSS 风险优先级分级（对标 Dependency-Track / Wiz / Grype）**：新增 `in_cisa_kev`、`epss_score` 与 `P0`–`P3` 风险分级矩阵（融合 CISA KEV、EPSS 概率与 Call-Graph 可达性），并透出至 CycloneDX 1.5、PR 评审评论与 Web 工作台。

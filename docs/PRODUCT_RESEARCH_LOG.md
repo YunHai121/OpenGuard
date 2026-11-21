@@ -38,9 +38,14 @@
   - ~~**Dependency License & Supply-Chain Policy Engine（对标 OPA / FOSSA / Socket Policy）**~~（已在 Round #6 落地 `policy.denied_licenses` / `allowed_licenses` / `denied_packages`）
   - ~~**HTML / PDF 报告同步升级**~~（已在 Round #6 落地 Quality Gate 门禁表与 P0–P3 KEV/EPSS/可达性徽章）
 - **下一阶段新候选方向（v1.3.0 规划）**：
-  - **OpenSSF Scorecard / Supply-Chain 仓库健康度体检扩展（对标 OpenSSF Scorecard / deps.dev）**：检测 `CODEOWNERS`、Dependabot/Renovate 自动升级配置、安全发布签名（GPG/Sigstore）与锁文件完整性哈希检查（`package-lock.json` `integrity` / `requirements.txt` `--hash`）；
-  - **多进程/线程池并发扫描加速（对标 Gitleaks / TruffleHog / Semgrep 性能工程）**：对大型单仓（10,000+ 文件）引入自适应并发文件扫描与增量缓存，显著缩短大仓全量审计耗时；
-  - **版本发布整理 (`v1.3.0`)**：整合 Round #2–#6 全部能力（AI 规则安全 + CRC32 校验 + 10 生态 SBOM + 污点追踪 + SLSA Provenance + KEV/EPSS + IaC + 声明式策略引擎），更新 `README.md`、`docs/ARCHITECTURE.md` 并发布 `v1.3.0` 正式版本标签。
+  - ~~**OpenSSF Scorecard / Supply-Chain 仓库健康度体检扩展**~~（已在 Round #7 落地锁文件防篡改/降级守卫 + `.github/dependabot.yml` + `.github/CODEOWNERS`）
+  - ~~**多进程/线程池并发扫描加速**~~（已在 Round #7 落地 `ThreadPoolExecutor` 自适应并发扫描）
+  - ~~**版本发布整理 (`v1.3.0`)**~~（已在 Round #7 打标发布 `v1.3.0`）
+- **v1.4.0 下一阶段候选调研方向**：
+  - **GitHub / GitLab / Gitee 真实开源仓库压测与误报微调**：在真实开源项目上批量实测 OpenGuard v1.3.0，收集边缘语法/误报案例反哺规则精度；
+  - **JavaScript / TypeScript 跨语句污点分析（对标 Semgrep JS / CodeQL）**：将 Python 污点引擎的 `Sources -> Sanitizers -> Sinks` 能力延伸至 Express/Next.js 的 XSS / SSRF / Prototype Pollution / Command Injection；
+  - **OpenTelemetry / JSONL 流式结构化日志与增量文件哈希缓存（对标 Bazel/Nx + Semgrep 缓存架构）**：对未变动文件按 SHA-256 缓存扫描结果，让超大单仓二次扫描进入亚秒级；
+  - **Rust / Java / C++ SAST 扩展（`unsafe` 审计、`Runtime.getRuntime().exec`、`strcpy`/`sprintf`）**。
 
 ---
 
@@ -149,3 +154,25 @@
 ### 验证结果
 - 新增 `tests/test_v16_policy_and_reports.py`，全量单测增至 **86 / 86 通过**；
 - 自身审计：**100.0/100 (A+)**，**Quality Gate: PASSED**。
+
+---
+
+## Round #7 — 2026-11-22 02:28–02:34（里程碑发布 `v1.3.0`）
+
+### 本轮重点对标产品
+- **OpenSSF Scorecard（`Dependency-Update-Tool` / `CODEOWNERS` / Lockfile `sha512` Integrity）**：自动化依赖更新工具配置、关键路径代码审查归属以及锁文件完整性哈希校验，防止注册表中间人降级与锁文件投毒攻击。
+- **Semgrep / Gitleaks / TruffleHog 大仓并发架构**：采用进程内多线程（共享内存、避免 Windows 进程派生开销）在不破坏确定性排序的前提下加速大型单仓扫描。
+
+### 核心发现与已落地改进（整合发布 `v1.3.0`）
+1. **锁文件防篡改与降级守卫（`openguard/scanners/install_script_scanner.py`）+ OpenSSF 卫生加固**：
+   - 新增 `OG-SUP-LOCK-001`（CRITICAL）：检出 `package-lock.json` 中被篡改降级为明文 `http://` 的包下载地址；
+   - 新增 `OG-SUP-LOCK-002`（HIGH）：检出缺失 `integrity` 哈希或降级为弱 `sha1` 的远端依赖；
+   - 为 OpenGuard 仓库自身补齐 `.github/dependabot.yml`（覆盖 `pip` 与 `github-actions`）与 `.github/CODEOWNERS`。
+2. **自适应多线程并发扫描（`secret_scanner.py` + `code_security_scanner.py` + `config.py`）**：
+   - 当扫描文件数 ≥ 16 时自动启用 `ThreadPoolExecutor`（支持 `.openguard.yml` `max_workers` 配置），保持与单线程完全一致的确定性结果顺序。
+3. **正式整合发布 `OpenGuard v1.3.0`**：
+   - 同步版本号至 `1.3.0`（`pyproject.toml`、`__init__.py`、`models.py`），汇总 Round #2–#7 全部能力更新至 `README.md`、`CHANGELOG.md` 并打标 `v1.3.0`。
+
+### 验证结果
+- 新增 `tests/test_v17_lockfile_integrity_and_perf.py`（含 24 文件多线程 vs 单线程确定性一致校验），全量单测增至 **89 / 89 通过**；
+- 自身审计：**100.0/100 (A+)**，**Quality Gate: PASSED**，已打标 `v1.3.0` 并双仓同步。

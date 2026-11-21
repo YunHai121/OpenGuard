@@ -221,7 +221,7 @@ class AuditReport(BaseModel):
 
     model_config = ConfigDict(use_enum_values=True)
 
-    tool_version: str = "1.2.0"
+    tool_version: str = "1.3.0"
     scan_id: str = Field(default_factory=lambda: f"OG-{uuid4().hex[:10].upper()}")
     scanned_at: str = Field(
         default_factory=lambda: datetime.now(timezone.utc).astimezone().isoformat(timespec="seconds")

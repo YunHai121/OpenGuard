@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import ast
+from concurrent.futures import ThreadPoolExecutor
 import os
 import re
 from pathlib import Path
@@ -53,7 +54,7 @@ class CodeSecurityScanner:
         if root.is_file():
             return self.scan_file(root, root.parent)
 
-        findings: List[CodeSecurityFinding] = []
+        target_files: List[Path] = []
         for dirpath, dirnames, filenames in os.walk(root):
             rel_dir = Path(dirpath).resolve().relative_to(root).as_posix()
             dirnames[:] = [
@@ -66,7 +67,17 @@ class CodeSecurityScanner:
                 if is_path_excluded(rel, self.config.exclude_patterns):
                     continue
                 if fpath.suffix.lower() in (".py", ".js", ".ts", ".jsx", ".tsx", ".sh", ".go"):
-                    findings.extend(self.scan_file(fpath, root))
+                    target_files.append(fpath)
+
+        workers = max(1, min(int(getattr(self.config, "max_workers", 4) or 1), 8))
+        findings: List[CodeSecurityFinding] = []
+        if workers > 1 and len(target_files) >= 16:
+            with ThreadPoolExecutor(max_workers=workers) as pool:
+                for batch in pool.map(lambda p: self.scan_file(p, root), target_files):
+                    findings.extend(batch)
+        else:
+            for fpath in target_files:
+                findings.extend(self.scan_file(fpath, root))
         return findings
 
     def scan_file(self, file_path: Path, root_path: Path | None = None) -> List[CodeSecurityFinding]:

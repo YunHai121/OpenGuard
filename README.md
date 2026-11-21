@@ -24,14 +24,14 @@
    - **三阶降噪引擎**：自动过滤文档字符串（AST Docstring）、`re.compile()` 正则规则定义、`os.getenv()` 调用、占位符词根、UUID 与纯十六进制摘要。
    - **Git 历史回溯（`--git-history`）**：支持挖掘已从最新工作区删除但仍残留在 `.git` 历史 Commit 中的“幽灵密钥”。
 
-2. **7 大生态依赖解析（含现代锁文件）、SBOM/VEX 构建与许可证传染性冲突推导**
-   - 零编译静态解析 **PyPI / npm / Go / Maven / Rust / C++ / PHP** 依赖清单与现代锁文件（`requirements.txt`、`pyproject.toml`、`uv.lock`、`poetry.lock`、`package-lock.json`、`yarn.lock`、`pnpm-lock.yaml`、`go.mod`、`pom.xml`、`Cargo.lock` 等），构建 `NetworkX` 依赖有向图并导出 **CycloneDX 1.5（含自动 VEX 可利用性分析）** 与 **SPDX 2.3** 标准 SBOM。
-   - 支持 **20+ SPDX 主许可证识别（含木兰宽松许可证 `MulanPSL-2.0`）**，通过最短依赖路径算法自动定位 `MIT/Apache-2.0` 项目误引入 `GPL/AGPL/LGPL` 依赖的传染链条。
+2. **10 大生态依赖解析（含现代锁文件与 GitHub Actions）、SBOM/VEX/SLSA 与许可证合规策略**
+   - 零编译静态解析 **PyPI / npm / Go / Maven / Rust / C++ / PHP / RubyGems / .NET NuGet / GitHub Actions** 10 大生态清单与锁文件（`requirements.txt`、`pyproject.toml`、`uv.lock`、`poetry.lock`、`package-lock.json`、`yarn.lock`、`pnpm-lock.yaml`、`go.mod`、`go.sum`、`pom.xml`、`Cargo.lock`、`Gemfile.lock`、`composer.lock`、`*.csproj`、`.github/workflows/*.yml`），构建 `NetworkX` 依赖图并导出 **CycloneDX 1.5（含自动 VEX 与 KEV/EPSS 属性）**、**SPDX 2.3** 与 **SLSA v1.0 / in-toto 完整性证明（`openguard attest generate|verify`）**。
+   - 支持 **20+ SPDX 主许可证识别（含 `MulanPSL-2.0`）** 与 **声明式 Policy-as-Code（`.openguard.yml` 许可证黑白名单与禁用包门禁 + `.openguard/rules/*.yml` 自定义规则）**。
 
-3. **函数级 CVE 可达性、CI/CD 与 Dockerfile 供应链审计 + 多语言 SAST**
-   - 融合本地高危 CVE 知识库与 OSV.dev 批量接口，结合 **Python/JS/Go 函数调用级可达性分析**区分为 `call_reachable` / `import_only` / `unreachable` 三档，自动生成 CycloneDX VEX (`code_not_reachable`) 并对不可达漏洞评分降权。
-   - 静态扫描 `.github/workflows/*.yml`（未锁 40 位 SHA 的 Action、宽泛 `permissions`、`pull_request_target` 风险、表达式注入）、`.gitlab-ci.yml`、`Dockerfile`（`:latest`、root 运行、`ENV` 密钥、`curl | sh`）以及 `package.json` / `setup.py` 安装脚本投毒。
-   - 基于 Levenshtein 编辑距离检测拼写仿冒包（`reqeusts`）与 AI 幻觉包（Slopsquatting），内置 Python AST / JS / Shell / Go SAST。
+3. **函数级 CVE 可达性 + CISA KEV/EPSS 分级 + AI 供应链 / 云原生 IaC / 跨语句污点追踪**
+   - 融合本地高危 CVE 知识库、OSV.dev、**CISA KEV（已知在野利用）**与 **EPSS 概率**，结合 **Call-Graph 函数调用级可达性**自动划分 `P0`–`P3` 风险处置梯队，自动生成 CycloneDX VEX (`code_not_reachable`)。
+   - **全方位供应链与配置防线**：CI/CD 工作流（未锁 40 位 SHA Action、`pull_request_target`、表达式注入）、**AI Rules-File Backdoor（隐蔽 Unicode Tag `U+E0000` 解码、Trojan Source BiDi、`.cursorrules`/`CLAUDE.md` 间接注入、`.mcp.json` 配置投毒）**、**云原生 IaC（Dockerfile / Docker Compose / Kubernetes / Terraform）**、锁文件完整性降级守卫与离线 **GitHub/npm CRC32 凭据校验**。
+   - 内置 **Python 跨语句 AST 污点传播引擎**（追踪外部输入经拼接流入 SQLi / RCE / SSRF / 目录穿越，自动识别 `int`/`shlex.quote`/`os.path.basename`/`is_relative_to` 净化器）与 JS / Go / Shell SAST，支持大仓多线程并发扫描。
 
 4. **Diff-Aware 增量门禁、Baseline 基线、一键修复闭环 (`autofix`) 与 AI MCP Server**
    - 支持 `--diff origin/main` PR 增量扫描、`openguard baseline create` 存量债务基线、`--format pr-comment` 紧凑 PR 评审评论与 `.pre-commit-hooks.yaml` 零配置接入。

@@ -7,6 +7,7 @@ import math
 import os
 import re
 import subprocess
+from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
@@ -124,6 +125,7 @@ class SecretScanner:
         files_scanned = 0
         lines_scanned = 0
 
+        candidate_files: List[Path] = []
         for dirpath, dirnames, filenames in os.walk(root):
             # Prune obviously excluded top dirs early
             rel_dir = Path(dirpath).resolve().relative_to(root).as_posix()
@@ -144,14 +146,22 @@ class SecretScanner:
                         continue
                 except OSError:
                     continue
+                candidate_files.append(fpath)
 
-                outcome = self.scan_file(fpath, root)
-                files_scanned += outcome.files_scanned
-                lines_scanned += outcome.lines_scanned
-                all_findings.extend(outcome.findings)
-                suppressed_count += outcome.suppressed_count
-                if len(suppressed_samples) < 25 and outcome.suppressed_samples:
-                    suppressed_samples.extend(outcome.suppressed_samples[: 25 - len(suppressed_samples)])
+        workers = max(1, min(int(getattr(self.config, "max_workers", 4) or 1), 8))
+        if workers > 1 and len(candidate_files) >= 16:
+            with ThreadPoolExecutor(max_workers=workers) as pool:
+                outcomes = list(pool.map(lambda p: self.scan_file(p, root), candidate_files))
+        else:
+            outcomes = [self.scan_file(p, root) for p in candidate_files]
+
+        for outcome in outcomes:
+            files_scanned += outcome.files_scanned
+            lines_scanned += outcome.lines_scanned
+            all_findings.extend(outcome.findings)
+            suppressed_count += outcome.suppressed_count
+            if len(suppressed_samples) < 25 and outcome.suppressed_samples:
+                suppressed_samples.extend(outcome.suppressed_samples[: 25 - len(suppressed_samples)])
 
         return SecretScanOutcome(
             findings=all_findings,

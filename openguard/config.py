@@ -84,6 +84,7 @@ class AuditConfig(BaseModel):
     min_confidence: float = 0.45
     entropy_threshold: float = 3.3
     max_file_size_kb: int = 1024
+    max_workers: int = 4
     staged_only: bool = False
     diff_ref: Optional[str] = None
     baseline_path: Optional[str] = None
