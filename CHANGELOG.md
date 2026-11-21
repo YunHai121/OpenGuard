@@ -5,6 +5,8 @@ All notable changes to **OpenGuard (开源卫士)** are documented in this file 
 ## [Unreleased]
 
 ### Added
+- **CISA KEV & EPSS 风险优先级分级（对标 Dependency-Track / Wiz / Grype）**：新增 `in_cisa_kev`、`epss_score` 与 `P0`–`P3` 风险分级矩阵（融合 CISA KEV、EPSS 概率与 Call-Graph 可达性），并透出至 CycloneDX 1.5、PR 评审评论与 Web 工作台。
+- **云原生 IaC 安全审计器 (`IaCScanner`，对标 Checkov / Trivy Config)**：新增 9 项静态规则（`OG-IAC-001`–`OG-IAC-009`），覆盖 `docker-compose.yml`、Kubernetes YAML 与 Terraform `*.tf` 常见高危误配置。
 - **Python 跨语句 AST 污点传播分析引擎 (`PythonTaintAnalyzer`)**：对标 Semgrep Taint Mode，在函数与模块作用域内追踪外部用户输入（`request.args/form/json/values`、`sys.argv`、`input`）经变量赋值/拼接流入 SQL 注入（`OG-TAINT-PY-001`）、命令注入（`OG-TAINT-PY-002`）、SSRF（`OG-TAINT-PY-003`）与路径穿越（`OG-TAINT-PY-004`），并内置 `int`/`shlex.quote`/`os.path.basename`/`is_relative_to` 等净化器降噪。
 - **SLSA v1.0 Provenance & in-toto v1 证明导出与防篡改校验 (`slsa_provenance.py`)**：支持 `--format slsa`、Web `/api/export/{scan_id}/slsa` 与 `openguard attest generate|verify`，自动对仓库清单文件生成 SHA-256 密码学摘要并嵌入 SBOM `resolvedDependencies`。
 - **10 生态 SBOM 扩展（对标 Syft / OSV-SCALIBR）**：新增 GitHub Actions 工作流（`pkg:githubactions`）、`go.sum`、`Gemfile.lock`（RubyGems）、`composer.lock`（含许可证与传递边）及 `.NET *.csproj`（NuGet）解析器。

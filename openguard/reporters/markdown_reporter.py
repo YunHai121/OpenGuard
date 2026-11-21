@@ -162,8 +162,10 @@ def render_pr_comment(report: AuditReport) -> str:
         )
     for v in [x for x in report.vulnerabilities if x.reachable is not False][:8]:
         reach = v.reachability_level
+        kev_tag = " · **CISA KEV**" if v.in_cisa_kev else ""
+        epss_tag = f" · EPSS {v.epss_score * 100:.0f}%" if v.epss_score is not None else ""
         actionable.append(
-            f"| `{v.severity}` | Supply Chain (`{v.id}`) | `{v.source_file or v.component_name}` | `{v.component_name}@{v.component_version}` ({reach}) -> upgrade `{v.fixed_version}` |"
+            f"| `{v.severity}` | {v.priority_tier} Supply Chain (`{v.id}`) | `{v.source_file or v.component_name}` | `{v.component_name}@{v.component_version}` ({reach}{kev_tag}{epss_tag}) -> upgrade `{v.fixed_version}` |"
         )
     for cs in report.code_security_findings[:8]:
         actionable.append(

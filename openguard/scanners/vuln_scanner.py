@@ -12,6 +12,39 @@ from packaging.version import InvalidVersion, Version
 
 from openguard.models import DependencyComponent, FindingCategory, Severity, VulnerabilityFinding
 
+# Curated Offline CISA KEV (Known Exploited Vulnerabilities) & EPSS Intelligence Catalog
+CISA_KEV_SET = frozenset(
+    {
+        "CVE-2021-44228",  # Log4Shell
+        "CVE-2022-22965",  # Spring4Shell
+        "CVE-2023-44487",  # HTTP/2 Rapid Reset
+        "CVE-2023-38545",  # curl SOCKS5 heap buffer overflow
+        "CVE-2024-23334",  # aiohttp directory traversal actively scanned
+        "CVE-2021-3129",   # Laravel Ignition RCE
+        "CVE-2022-26134",  # Confluence OGNL RCE
+        "CVE-2023-4863",   # libwebp heap buffer overflow
+        "CVE-2024-3094",   # xz-utils supply-chain backdoor
+    }
+)
+
+OFFLINE_EPSS_SCORES: Dict[str, float] = {
+    "CVE-2021-44228": 0.975,
+    "CVE-2022-22965": 0.972,
+    "CVE-2023-44487": 0.946,
+    "CVE-2024-23334": 0.812,
+    "CVE-2020-14343": 0.684,
+    "CVE-2023-50447": 0.521,
+    "CVE-2024-6345": 0.448,
+    "CVE-2021-44906": 0.415,
+    "CVE-2021-23337": 0.352,
+    "CVE-2024-34069": 0.310,
+    "CVE-2022-29217": 0.285,
+    "CVE-2023-30861": 0.240,
+    "CVE-2023-32681": 0.165,
+    "CVE-2021-33503": 0.140,
+    "CVE-2024-24762": 0.128,
+}
+
 # Curated Offline CVE Database covering high-frequency Python, npm, Go, Maven, and Rust CVEs
 OFFLINE_CVE_DB: List[Dict[str, Any]] = [
     # PyPI
@@ -453,6 +486,8 @@ class VulnScanner:
                                 references=[f"https://nvd.nist.gov/vuln/detail/{entry['id']}"],
                                 source="offline_db",
                                 source_file=comp.source_file,
+                                in_cisa_kev=entry["id"] in CISA_KEV_SET,
+                                epss_score=OFFLINE_EPSS_SCORES.get(entry["id"]),
                                 remediation=f"升级 `{comp.name}` 至安全版本 `>={entry['fixed']}`。",
                             )
                         )
@@ -552,6 +587,8 @@ class VulnScanner:
                         references=[f"https://osv.dev/vulnerability/{vid}"],
                         source="osv_api",
                         source_file=comp.source_file,
+                        in_cisa_kev=vid in CISA_KEV_SET,
+                        epss_score=OFFLINE_EPSS_SCORES.get(vid),
                         remediation=f"升级 `{comp.name}` 至最新已修复版本，详见 https://osv.dev/vulnerability/{vid}。",
                     )
                 )

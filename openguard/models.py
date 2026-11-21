@@ -137,6 +137,9 @@ class VulnerabilityFinding(BaseModel):
     reachability_level: str = "unknown"  # "call_reachable" | "import_only" | "unreachable" | "unknown"
     import_locations: List[str] = Field(default_factory=list)
     call_locations: List[str] = Field(default_factory=list)
+    in_cisa_kev: bool = False
+    epss_score: Optional[float] = None
+    priority_tier: str = "P2"  # "P0" | "P1" | "P2" | "P3"
 
 
 class CodeSecurityFinding(BaseModel):

@@ -32,9 +32,11 @@
 - ~~**SonarQube / CodeQL / Bandit / Semgrep Taint**：Python/JS 跨语句污点传播（Taint Tracking，区分常量字符串与外部用户输入，进一步压低 SAST 误报）~~（已在 Round #4 落地 `PythonTaintAnalyzer`）
 - ~~**Web 工作台产品体验对标（Socket / Snyk / Dependency-Track）**：前端实时展示 Call-Graph 可达性徽章、VEX 状态筛选、CI/Dockerfile/AI-Config 分类视图与依赖一键升级面板~~（已在 Round #3 落地）
 - **下一阶段新候选方向**：
-  - **EPSS / CISA KEV 真实利用优先级（对标 Dependency-Track / Wiz / Grype）**：内置高频 CISA KEV（已知在野利用漏洞）离线清单，将“在野利用 + 函数可达”提升为 P0 最高优先级；
-  - **IaC 云原生配置审计（对标 Checkov / Trivy Misconfig / Terrascan）**：扫描 `docker-compose.yml`、Kubernetes YAML (`privileged: true`、`hostNetwork`、`runAsRoot`) 与 Terraform (`0.0.0.0/0` 公网开放、公开 S3 Bucket)；
-  - **Custom YAML Rule Engine（对标 Semgrep / Gitleaks 自定义规则包）**：支持团队通过 `.openguard/rules/*.yml` 零代码编写自定义 SAST/合规策略规则。
+  - ~~**EPSS / CISA KEV 真实利用优先级（对标 Dependency-Track / Wiz / Grype）**~~（已在 Round #5 落地 KEV/EPSS 情报库与 P0–P3 风险分级矩阵）
+  - ~~**IaC 云原生配置审计（对标 Checkov / Trivy Misconfig / Terrascan）**~~（已在 Round #5 落地 `IaCScanner`：`docker-compose` / Kubernetes / Terraform）
+  - **Custom YAML Rule Engine（对标 Semgrep / Gitleaks 自定义规则包）**：支持团队通过 `.openguard/rules/*.yml` 零代码编写自定义 SAST/合规策略规则；
+  - **Dependency License & Supply-Chain Policy Engine（对标 OPA / FOSSA / Socket Policy）**：支持在 `.openguard.yml` 中声明自定义许可证白名单/黑名单与阻断包策略（如禁用某许可证或强制要求特定依赖最低版本）；
+  - **HTML / PDF 报告同步升级**：在交互式 HTML 与中文 PDF 报告中同步呈现 Quality Gate 门禁卡片、P0–P3 KEV/EPSS 优先级与 Call-Graph 可达性指标。
 
 ---
 
@@ -101,4 +103,25 @@
 
 ### 验证结果
 - 新增 `tests/test_v14_taint_and_slsa.py`，更新 `test_export_report_all_formats_to_disk`（9 类导出产物），全量单测增至 **83 / 83 通过**；
+- 自身审计：**100.0/100 (A+)**，**Quality Gate: PASSED**。
+
+---
+
+## Round #5 — 2026-11-22 00:28–00:34
+
+### 本轮重点对标产品
+- **OWASP Dependency-Track / Anchore Grype / Wiz（基于真实利用风险的 RBVM 分级）**：突破纯 CVSS 静态分数的告警疲劳，融合 **CISA KEV（已知在野利用漏洞）**、**EPSS（30 天在野利用概率）** 与 **源码函数级可达性**，将漏洞自动划分为 `P0`–`P3` 四个处置梯队（最高可压降 90% 无效整改排期）。
+- **Checkov / Trivy `trivy config`（云原生 IaC 误配置审计）**：一站式静态审计 `docker-compose.yml`、Kubernetes 工作负载清单与 Terraform HCL，拦截特权容器、宿主机 `docker.sock` 挂载、公网 `0.0.0.0/0` 暴露与未加密存储。
+
+### 核心发现与已落地改进
+1. **CISA KEV & EPSS 风险优先级矩阵（`models.py` + `vuln_scanner.py` + `reachability_analyzer.py` + CycloneDX / PR Comment / Web UI）**：
+   - 在 `VulnerabilityFinding` 新增 `in_cisa_kev`、`epss_score`、`priority_tier`（`P0`–`P3`）字段，内置高频开源漏洞离线 CISA KEV 与 EPSS 情报库；
+   - 结合函数级可达性自动计算 `P0`（可达 + KEV / EPSS≥0.5 / Critical）至 `P3`（未导入且非 KEV，可 VEX 延后），并同步透出至 CycloneDX 1.5 `properties`、PR 评论 Markdown 与 Web 工作台徽章。
+2. **云原生 IaC 静态安全审计器（`openguard/scanners/iac_scanner.py`，接入 `OpenGuardAuditor` 与 Web 工作台）**：
+   - **Docker Compose**：`OG-IAC-001`（`privileged: true`）、`OG-IAC-002`（挂载 `/var/run/docker.sock`）、`OG-IAC-003`（`network_mode: host` 与敏感 DB 端口绑定 `0.0.0.0`）；
+   - **Kubernetes YAML**：`OG-IAC-004`（特权容器/提权）、`OG-IAC-005`（`hostNetwork/hostPID/hostIPC`）、`OG-IAC-006`（`runAsUser: 0` / `runAsNonRoot: false`）；
+   - **Terraform HCL (`*.tf`)**：`OG-IAC-007`（入站 `0.0.0.0/0`）、`OG-IAC-008`（公网 S3 Bucket）、`OG-IAC-009`（禁用加密 `encrypted = false`）。
+
+### 验证结果
+- 新增 `tests/test_v15_kev_epss_and_iac.py` 并通过 `node --check openguard/web/static/app.js`，全量单测增至 **85 / 85 通过**；
 - 自身审计：**100.0/100 (A+)**，**Quality Gate: PASSED**。

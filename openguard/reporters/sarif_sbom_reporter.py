@@ -159,6 +159,15 @@ def render_cyclonedx(report: AuditReport) -> Dict[str, Any]:
             "description": v.summary,
             "recommendation": v.remediation,
             "affects": [{"ref": comp_ref_by_name.get(v.component_name, v.component_name)}],
+            "properties": [
+                {"name": "openguard:priority_tier", "value": v.priority_tier},
+                {"name": "openguard:cisa_kev", "value": str(v.in_cisa_kev).lower()},
+                *(
+                    [{"name": "openguard:epss_score", "value": f"{v.epss_score:.3f}"}]
+                    if v.epss_score is not None
+                    else []
+                ),
+            ],
         }
         # Auto-generated CycloneDX 1.5 VEX analysis derived from OpenGuard Call-Graph Reachability
         if v.reachability_level == "unreachable" or v.reachable is False:

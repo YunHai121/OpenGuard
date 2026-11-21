@@ -140,18 +140,21 @@ function buildUnifiedIssues(report) {
     const isUnreachable = !isAttack && (v.reachability_level === 'unreachable' || v.reachable === false);
     const kind = isAttack ? 'supply_attack' : isUnreachable ? 'vuln_unreachable' : 'vuln_reachable';
     const rLevel = v.reachability_level || (v.reachable === true ? 'import_only' : v.reachable === false ? 'unreachable' : 'unknown');
+    const kevTag = v.in_cisa_kev ? ' · CISA KEV' : '';
+    const epssTag = typeof v.epss_score === 'number' ? ` · EPSS ${(v.epss_score * 100).toFixed(0)}%` : '';
+    const prioPrefix = v.priority_tier ? `[${v.priority_tier}] ` : '';
     const pill =
       v.source === 'install_script'
-        ? 'INSTALL SCRIPT'
+        ? '[P0] INSTALL SCRIPT'
         : v.source === 'typosquatting'
-        ? 'TYPOSQUAT'
+        ? '[P0] TYPOSQUAT'
         : rLevel === 'call_reachable'
-        ? 'CALL REACHABLE · VEX: exploitable'
+        ? `${prioPrefix}CALL REACHABLE${kevTag}${epssTag}`
         : rLevel === 'import_only'
-        ? 'IMPORT ONLY · VEX: in_triage'
+        ? `${prioPrefix}IMPORT ONLY${kevTag}${epssTag}`
         : rLevel === 'unreachable'
-        ? 'UNREACHABLE · VEX: not_affected'
-        : `CVSS ${v.cvss_score}`;
+        ? `${prioPrefix}UNREACHABLE · VEX: not_affected`
+        : `${prioPrefix}CVSS ${v.cvss_score}${kevTag}`;
     const callLocs = (v.call_locations || []).join(', ');
     const locs = callLocs || (v.import_locations || []).join(', ');
     const firstLoc = (v.call_locations && v.call_locations[0]) || (v.import_locations && v.import_locations[0]) || null;
@@ -210,11 +213,13 @@ function buildUnifiedIssues(report) {
 
   report.code_security_findings.forEach((cs) => {
     const rid = String(cs.rule_id || '');
-    const isSupplyCfg = rid.startsWith('OG-CI-') || rid.startsWith('OG-DOCKER-') || rid.startsWith('OG-AI-');
+    const isSupplyCfg = rid.startsWith('OG-CI-') || rid.startsWith('OG-DOCKER-') || rid.startsWith('OG-AI-') || rid.startsWith('OG-IAC-');
     const pill = rid.startsWith('OG-CI-')
       ? 'CI/CD 供应链'
       : rid.startsWith('OG-DOCKER-')
       ? 'DOCKERFILE'
+      : rid.startsWith('OG-IAC-')
+      ? 'IAC 云原生'
       : rid.startsWith('OG-AI-')
       ? 'AI 安全/UNICODE'
       : 'SAST';

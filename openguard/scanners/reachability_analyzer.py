@@ -351,10 +351,12 @@ class ReachabilityAnalyzer:
             if vuln.source == "install_script":
                 vuln.reachable = True
                 vuln.reachability_level = "call_reachable"
+                vuln.priority_tier = "P0"
                 continue
             if vuln.ecosystem not in self.SUPPORTED_ECOSYSTEMS:
                 vuln.reachable = None
                 vuln.reachability_level = "unknown"
+                vuln.priority_tier = self._compute_priority_tier(vuln)
                 continue
             locs = comp_usage.get(key)
             if locs is None:
@@ -365,6 +367,7 @@ class ReachabilityAnalyzer:
                 vuln.reachable = False
                 vuln.reachability_level = "unreachable"
                 vuln.call_locations = []
+                vuln.priority_tier = self._compute_priority_tier(vuln)
                 continue
 
             vuln.reachable = True
@@ -379,3 +382,21 @@ class ReachabilityAnalyzer:
             else:
                 vuln.reachability_level = "import_only"
                 vuln.call_locations = []
+            vuln.priority_tier = self._compute_priority_tier(vuln)
+
+    @staticmethod
+    def _compute_priority_tier(vuln: VulnerabilityFinding) -> str:
+        """Compute Wiz / Dependency-Track-style Risk-Based Priority Tier (P0-P3)."""
+        sev = str(getattr(vuln.severity, "value", vuln.severity)).upper()
+        epss = vuln.epss_score or 0.0
+        is_unreachable = vuln.reachability_level == "unreachable" or vuln.reachable is False
+        is_call_reach = vuln.reachability_level == "call_reachable"
+
+        if not is_unreachable:
+            if vuln.in_cisa_kev or (is_call_reach and (epss >= 0.50 or sev == "CRITICAL")):
+                return "P0"
+            if sev in ("CRITICAL", "HIGH") or epss >= 0.30:
+                return "P1"
+            return "P2"
+        # Unreachable in source code: elevate only if actively exploited (CISA KEV), else defer to P3
+        return "P2" if vuln.in_cisa_kev else "P3"
