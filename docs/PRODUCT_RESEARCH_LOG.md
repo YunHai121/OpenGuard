@@ -27,10 +27,14 @@
 ### 下一轮候选调研方向（待每小时逐步深化）
 - ~~**TruffleHog v3 / Kingfisher / GitGuardian**：离线凭据格式校验~~（已在 Round #2 落地 GitHub/npm CRC32 校验与 GitLab Routable Token 适配）
 - ~~**AI Agent / LLM 供应链安全（2026 新赛道）**：Rules-File Backdoor / 隐蔽 Unicode / MCP 配置投毒检测~~（已在 Round #2 落地 `AIConfigSecurityScanner`）
-- **SLSA / Sigstore / Cosign / GitHub Artifact Attestations**：构建来源证明（Provenance）、SBOM 完整性签名校验与发布产物防篡改检查；
+- ~~**SLSA / Sigstore / Cosign / GitHub Artifact Attestations**：构建来源证明（Provenance）、SBOM 完整性签名校验与发布产物防篡改检查~~（已在 Round #4 落地 `slsa_provenance.py` 与 `openguard attest generate|verify`）
 - ~~**OSV-SCALIBR / Syft / Grype**：更多生态（`go.sum`、`Gemfile.lock`、`composer.lock`、`.NET *.csproj`、GitHub Actions `uses` 纳入 SBOM 组件图）~~（已在 Round #3 落地 10 生态 SBOM 扩展）
-- **SonarQube / CodeQL / Bandit / Semgrep Taint**：Python/JS 跨语句污点传播（Taint Tracking，区分常量字符串与外部用户输入，进一步压低 SAST 误报）；
+- ~~**SonarQube / CodeQL / Bandit / Semgrep Taint**：Python/JS 跨语句污点传播（Taint Tracking，区分常量字符串与外部用户输入，进一步压低 SAST 误报）~~（已在 Round #4 落地 `PythonTaintAnalyzer`）
 - ~~**Web 工作台产品体验对标（Socket / Snyk / Dependency-Track）**：前端实时展示 Call-Graph 可达性徽章、VEX 状态筛选、CI/Dockerfile/AI-Config 分类视图与依赖一键升级面板~~（已在 Round #3 落地）
+- **下一阶段新候选方向**：
+  - **EPSS / CISA KEV 真实利用优先级（对标 Dependency-Track / Wiz / Grype）**：内置高频 CISA KEV（已知在野利用漏洞）离线清单，将“在野利用 + 函数可达”提升为 P0 最高优先级；
+  - **IaC 云原生配置审计（对标 Checkov / Trivy Misconfig / Terrascan）**：扫描 `docker-compose.yml`、Kubernetes YAML (`privileged: true`、`hostNetwork`、`runAsRoot`) 与 Terraform (`0.0.0.0/0` 公网开放、公开 S3 Bucket)；
+  - **Custom YAML Rule Engine（对标 Semgrep / Gitleaks 自定义规则包）**：支持团队通过 `.openguard/rules/*.yml` 零代码编写自定义 SAST/合规策略规则。
 
 ---
 
@@ -74,3 +78,27 @@
 ### 验证结果
 - 新增单元测试 `tests/test_v13_ecosystems_and_web_ux.py` 并通过 `node --check openguard/web/static/app.js` 语法检查，全量单测增至 **80 / 80 通过**；
 - 自身审计：**100.0/100 (A+)**，**Quality Gate: PASSED**（63 文件 / 13279 行，0 告警）。
+
+---
+
+## Round #4 — 2026-11-21 23:28–23:34
+
+### 本轮重点对标产品
+- **Semgrep Taint Mode / CodeQL / Bandit**：函数内跨语句污点传播（Intraprocedural Dataflow Taint Tracking），通过 `Sources -> Propagators -> Sanitizers -> Sinks` 精准捕获跨变量拼接的 SQL 注入、命令注入、SSRF 与目录穿越，同时自动识别 `int()`/`shlex.quote()`/`os.path.basename()`/`is_relative_to()` 等净化器压低误报。
+- **SLSA v1.0 / in-toto Statement v1 / Sigstore / OpenSSF Scorecard**：将“供应链成分（SBOM）”延伸至“构建来源与产物防篡改证明（Provenance Attestation）”，通过 SHA-256 密码学摘要绑定清单文件、Git Commit 与解析后的 10 生态依赖图。
+
+### 核心发现与已落地改进
+1. **Python 跨语句 AST 污点传播引擎（`openguard/scanners/taint_analyzer.py`，接入 `CodeSecurityScanner`）**：
+   - 支持追踪 `request.args/form/json/values/cookies/headers`、`input()`、`sys.argv` 等外部不可信源经变量赋值、f-string、字符串拼接与 `os.path.join` 传播至 4 大高危汇点：
+     - `OG-TAINT-PY-001` (CRITICAL, CWE-89)：跨语句 SQL 注入；
+     - `OG-TAINT-PY-002` (CRITICAL, CWE-78)：跨语句 OS 命令注入；
+     - `OG-TAINT-PY-003` (HIGH, CWE-918)：服务端请求伪造（SSRF）；
+     - `OG-TAINT-PY-004` (HIGH, CWE-22)：目录穿越 / 任意文件访问；
+   - 内置 12+ 常见净化器（`int`/`float`/`shlex.quote`/`os.path.basename`/`Path.name`/`html.escape`/`is_relative_to`/`sanitize_*`）自动消除安全代码误报。
+2. **SLSA v1.0 / in-toto 供应链证明与防篡改校验（`openguard/reporters/slsa_provenance.py`）**：
+   - 新增 `--format slsa`（同步纳入 `--format all` 与 Web `/api/export/{scan_id}/slsa`），输出符合 `https://in-toto.io/Statement/v1` 与 `https://slsa.dev/provenance/v1` 规范的 JSON 证明，内置所有清单文件 SHA-256 摘要、Git Commit 与 SBOM `resolvedDependencies`；
+   - 新增 CLI 命令 `openguard attest generate|verify`，可离线核验清单文件是否被篡改（Digest Mismatch 检测）。
+
+### 验证结果
+- 新增 `tests/test_v14_taint_and_slsa.py`，更新 `test_export_report_all_formats_to_disk`（9 类导出产物），全量单测增至 **83 / 83 通过**；
+- 自身审计：**100.0/100 (A+)**，**Quality Gate: PASSED**。

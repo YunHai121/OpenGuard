@@ -5,6 +5,8 @@ All notable changes to **OpenGuard (开源卫士)** are documented in this file 
 ## [Unreleased]
 
 ### Added
+- **Python 跨语句 AST 污点传播分析引擎 (`PythonTaintAnalyzer`)**：对标 Semgrep Taint Mode，在函数与模块作用域内追踪外部用户输入（`request.args/form/json/values`、`sys.argv`、`input`）经变量赋值/拼接流入 SQL 注入（`OG-TAINT-PY-001`）、命令注入（`OG-TAINT-PY-002`）、SSRF（`OG-TAINT-PY-003`）与路径穿越（`OG-TAINT-PY-004`），并内置 `int`/`shlex.quote`/`os.path.basename`/`is_relative_to` 等净化器降噪。
+- **SLSA v1.0 Provenance & in-toto v1 证明导出与防篡改校验 (`slsa_provenance.py`)**：支持 `--format slsa`、Web `/api/export/{scan_id}/slsa` 与 `openguard attest generate|verify`，自动对仓库清单文件生成 SHA-256 密码学摘要并嵌入 SBOM `resolvedDependencies`。
 - **10 生态 SBOM 扩展（对标 Syft / OSV-SCALIBR）**：新增 GitHub Actions 工作流（`pkg:githubactions`）、`go.sum`、`Gemfile.lock`（RubyGems）、`composer.lock`（含许可证与传递边）及 `.NET *.csproj`（NuGet）解析器。
 - **Web 工作台与 API 对齐（对标 Socket / Dependency-Track / Snyk）**：新增 3 级 Call-Graph/VEX 状态徽章、`CI / 容器 / AI 安全` 独立筛选标签、Web 端一键依赖升级（`fix_deps` Diff 预览/应用）、`PR / MR 评审评论` 导出以及实时检测台 Go/`.cursorrules` 场景支持；同步修复 Windows `NO_PROXY=[::1]` 下 OSV 客户端初始化兼容性。
 - **AI 供应链安全审计器 (`AIConfigSecurityScanner`)**：检测隐藏 Unicode Tag Block (`U+E0000–U+E007F`) 隐写并自动解码载荷预览（`OG-AI-001`）、Trojan Source 双向控制符与零宽字符混淆（`OG-AI-002`）、`.cursorrules`/`CLAUDE.md`/`AGENTS.md` 间接提示词注入后门（`OG-AI-003`）以及 `.mcp.json` 配置投毒与未锁版本 `npx`/`uvx` Rug-Pull 风险（`OG-AI-004`）。

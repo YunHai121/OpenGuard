@@ -22,6 +22,7 @@ from openguard.reporters.html_reporter import render_html_report
 from openguard.reporters.markdown_reporter import render_markdown_report, render_pr_comment
 from openguard.reporters.pdf_reporter import render_pdf_bytes
 from openguard.reporters.sarif_sbom_reporter import render_cyclonedx, render_sarif, render_spdx
+from openguard.reporters.slsa_provenance import render_slsa_provenance
 from openguard.scanners.secret_rules import build_builtin_secret_rules
 from openguard.utils.entropy import mask_secret
 from openguard.web.storage import AuditHistoryStore
@@ -337,6 +338,11 @@ def create_app(db_path: Optional[Path] = None) -> FastAPI:
             return JSONResponse(
                 content=render_spdx(report),
                 headers={"Content-Disposition": f'attachment; filename="{scan_id}.spdx.json"'},
+            )
+        if fmt_l == "slsa":
+            return JSONResponse(
+                content=render_slsa_provenance(report),
+                headers={"Content-Disposition": f'attachment; filename="{scan_id}.slsa.json"'},
             )
         if fmt_l == "badge":
             return Response(content=render_badge_svg(report), media_type="image/svg+xml")

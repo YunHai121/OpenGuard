@@ -23,6 +23,7 @@ from openguard.reporters.html_reporter import render_html_report
 from openguard.reporters.markdown_reporter import render_markdown_report, render_pr_comment
 from openguard.reporters.pdf_reporter import render_pdf_bytes
 from openguard.reporters.sarif_sbom_reporter import render_cyclonedx, render_sarif, render_spdx
+from openguard.reporters.slsa_provenance import render_slsa_provenance
 from openguard.scanners.ai_config_scanner import AIConfigSecurityScanner
 from openguard.scanners.ci_workflow_scanner import CIWorkflowScanner
 from openguard.scanners.code_security_scanner import CodeSecurityScanner
@@ -309,6 +310,7 @@ class OpenGuardAuditor:
                 "sarif": out / "audit_report.sarif.json",
                 "cyclonedx": out / "sbom.cyclonedx.json",
                 "spdx": out / "sbom.spdx.json",
+                "slsa": out / "slsa_provenance.json",
                 "badge": out / "openguard_badge.svg",
             }
             for sub_fmt, target_file in formats_to_files.items():
@@ -332,6 +334,8 @@ class OpenGuardAuditor:
             out.write_text(json.dumps(render_cyclonedx(report), indent=2, ensure_ascii=False), encoding="utf-8")
         elif fmt_lower == "spdx":
             out.write_text(json.dumps(render_spdx(report), indent=2, ensure_ascii=False), encoding="utf-8")
+        elif fmt_lower == "slsa":
+            out.write_text(json.dumps(render_slsa_provenance(report), indent=2, ensure_ascii=False), encoding="utf-8")
         elif fmt_lower == "badge":
             out.write_text(render_badge_svg(report), encoding="utf-8")
         else:

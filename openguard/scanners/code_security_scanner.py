@@ -283,6 +283,16 @@ class CodeSecurityScanner:
                 return ""
 
         _SastVisitor().visit(tree)
+
+        # Intra-procedural Python AST Taint Tracking (SQLi, Command Injection, SSRF, Path Traversal)
+        from openguard.scanners.taint_analyzer import PythonTaintAnalyzer
+
+        existing_keys = {(f.line_number, f.cwe_id) for f in findings}
+        for tf in PythonTaintAnalyzer().analyze(content, file_path):
+            if (tf.line_number, tf.cwe_id) not in existing_keys:
+                existing_keys.add((tf.line_number, tf.cwe_id))
+                findings.append(tf)
+
         return findings
 
     def _scan_js_patterns(self, content: str, file_path: str) -> List[CodeSecurityFinding]:

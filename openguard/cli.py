@@ -167,7 +167,7 @@ def scan(
     baseline: Optional[Path] = typer.Option(None, "--baseline", help="基线文件路径（自动忽略基线中已有存量问题，仅拦截新增风险）"),
     offline: bool = typer.Option(False, "--offline", help="离线模式（跳过 OSV API 请求，纯本地库检测）"),
     license_override: Optional[str] = typer.Option(None, "--license", help="手动覆盖项目主 SPDX 许可证（如 MIT / Apache-2.0）"),
-    fmt: Optional[str] = typer.Option(None, "--format", help="导出格式: html|pdf|json|sarif|md|pr-comment|cyclonedx|spdx|badge|all"),
+    fmt: Optional[str] = typer.Option(None, "--format", help="导出格式: html|pdf|json|sarif|md|pr-comment|cyclonedx|spdx|slsa|badge|all"),
     output: Optional[Path] = typer.Option(None, "--output", "-o", help="导出文件路径或目录（--format all 时为目录）"),
     fail_on: str = typer.Option("none", "--fail-on", help="门禁退出阈值: critical|high|medium|low|none"),
     config_file: Optional[Path] = typer.Option(None, "--config", "-c", help="自定义 .openguard.yml 配置文件路径"),
@@ -289,6 +289,34 @@ def mcp() -> None:
     from openguard.mcp_server import run_stdio_server
 
     run_stdio_server()
+
+
+@app.command()
+def attest(
+    action: str = typer.Argument(..., help="操作: generate | verify"),
+    target: Path = typer.Argument(".", help="目标仓库目录（generate 时为仓库；verify 时为 provenance JSON 文件）"),
+    repo: Optional[Path] = typer.Option(None, "--repo", help="verify 时用于校验文件 SHA-256 完整性的仓库目录"),
+    output: Path = typer.Option(Path("slsa_provenance.json"), "--output", "-o", help="generate 时的输出路径"),
+) -> None:
+    """生成或校验 in-toto v1 / SLSA Provenance v1.0 供应链完整度证明。"""
+    from openguard.reporters.slsa_provenance import verify_slsa_provenance
+
+    act = action.lower().strip()
+    if act == "generate":
+        report = OpenGuardAuditor(AuditConfig(offline=True)).audit(target)
+        written = OpenGuardAuditor.export_report(report, "slsa", output)
+        console.print(f"[green]已生成 SLSA v1.0 / in-toto 证明文件:[/green] {written[0]}")
+    elif act == "verify":
+        ok, errs = verify_slsa_provenance(target, repo_root=repo)
+        if ok:
+            console.print(f"[bold green]SLSA Provenance 校验通过:[/bold green] {target}")
+        else:
+            for e in errs:
+                console.print(f"[bold red]校验失败:[/bold red] {e}")
+            raise typer.Exit(code=1)
+    else:
+        console.print(f"[red]未知 attest 操作: {action}（支持 generate | verify）[/red]")
+        raise typer.Exit(code=2)
 
 
 @app.command()

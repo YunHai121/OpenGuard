@@ -112,7 +112,8 @@ class TestRemediationAndReporters(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             out_dir = Path(tmp) / "all_exports"
             written = auditor.export_report(report, "all", out_dir)
-            self.assertEqual(len(written), 8)
+            self.assertEqual(len(written), 9)
+            self.assertIn("slsa_provenance.json", {p.name for p in written})
             for p in written:
                 self.assertTrue(p.is_file())
                 self.assertGreater(p.stat().st_size, 100)
