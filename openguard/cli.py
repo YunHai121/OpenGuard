@@ -15,8 +15,10 @@ from rich.table import Table
 
 from openguard import __version__
 from openguard.auditor import OpenGuardAuditor
+from openguard.baseline import save_baseline
 from openguard.config import AuditConfig, load_config
 from openguard.models import SEVERITY_ORDER, AuditReport, Severity
+from openguard.remediation.dep_remediator import DependencyRemediator
 from openguard.remediation.doc_generator import DocGenerator
 from openguard.remediation.hook_installer import HookInstaller
 from openguard.remediation.secret_remediator import SecretRemediator
@@ -122,9 +124,14 @@ def _print_report_summary(report: AuditReport) -> None:
         v_tbl.add_column("修复版本")
         v_tbl.add_column("说明")
         for v in report.vulnerabilities[:15]:
-            reach_str = (
-                "[red]可达[/red]" if v.reachable is True else ("[dim]未导入[/dim]" if v.reachable is False else "-")
-            )
+            if v.reachability_level == "call_reachable":
+                reach_str = "[bold red]函数可达[/bold red]"
+            elif v.reachability_level == "import_only" or v.reachable is True:
+                reach_str = "[yellow]已导入[/yellow]"
+            elif v.reachability_level == "unreachable" or v.reachable is False:
+                reach_str = "[dim]未导入[/dim]"
+            else:
+                reach_str = "-"
             v_tbl.add_row(v.id, f"{v.component_name}@{v.component_version}", reach_str, f"{v.severity} ({v.cvss_score})", v.fixed_version, v.summary)
         console.print(v_tbl)
 
@@ -156,9 +163,11 @@ def scan(
     git_history: bool = typer.Option(False, "--git-history", help="回溯扫描 Git 历史 Commit 中的幽灵密钥"),
     max_commits: int = typer.Option(100, "--max-commits", help="历史提交扫描上限"),
     staged: bool = typer.Option(False, "--staged", help="仅扫描 git staged 暂存区变更（适用于 pre-commit）"),
+    diff: Optional[str] = typer.Option(None, "--diff", help="Diff-Aware 增量扫描基准分支/提交（如 origin/main 或 HEAD~1）"),
+    baseline: Optional[Path] = typer.Option(None, "--baseline", help="基线文件路径（自动忽略基线中已有存量问题，仅拦截新增风险）"),
     offline: bool = typer.Option(False, "--offline", help="离线模式（跳过 OSV API 请求，纯本地库检测）"),
     license_override: Optional[str] = typer.Option(None, "--license", help="手动覆盖项目主 SPDX 许可证（如 MIT / Apache-2.0）"),
-    fmt: Optional[str] = typer.Option(None, "--format", help="导出格式: html|pdf|json|sarif|md|cyclonedx|spdx|badge|all"),
+    fmt: Optional[str] = typer.Option(None, "--format", help="导出格式: html|pdf|json|sarif|md|pr-comment|cyclonedx|spdx|badge|all"),
     output: Optional[Path] = typer.Option(None, "--output", "-o", help="导出文件路径或目录（--format all 时为目录）"),
     fail_on: str = typer.Option("none", "--fail-on", help="门禁退出阈值: critical|high|medium|low|none"),
     config_file: Optional[Path] = typer.Option(None, "--config", "-c", help="自定义 .openguard.yml 配置文件路径"),
@@ -174,6 +183,10 @@ def scan(
     cfg.include_git_history = git_history or cfg.include_git_history
     cfg.max_git_commits = max_commits
     cfg.staged_only = staged
+    if diff:
+        cfg.diff_ref = diff
+    if baseline:
+        cfg.baseline_path = str(baseline)
     cfg.offline = offline or cfg.offline
     if license_override:
         cfg.project_license_override = license_override
@@ -200,21 +213,23 @@ def autofix(
     target: Path = typer.Argument(..., help="目标开源仓库目录"),
     secrets: bool = typer.Option(False, "--secrets", help="自动剥离硬编码密钥为环境变量并生成 .env.example"),
     docs: bool = typer.Option(False, "--docs", help="一键补齐缺失的标准开源规范文档与 .gitignore"),
+    deps: bool = typer.Option(False, "--deps", help="自动将存在已知 CVE 的依赖升级至最小安全版本"),
     license_id: str = typer.Option("MIT", "--license", help="生成的许可证模板类型: MIT|Apache-2.0|MulanPSL-2.0"),
     apply: bool = typer.Option(False, "--apply", help="真正写入修改（默认仅 dry-run 预览 diff）"),
     force: bool = typer.Option(False, "--force", help="文档生成时强制覆盖已有文件"),
 ) -> None:
-    """自动修复硬编码敏感凭据与补齐缺失开源工程文档（默认预览模式，加 --apply 执行写入）。"""
-    if not secrets and not docs:
+    """自动修复硬编码敏感凭据、补齐缺失开源工程文档与升级漏洞依赖（默认预览模式，加 --apply 执行写入）。"""
+    if not secrets and not docs and not deps:
         secrets = True
         docs = True
 
     root = target.resolve()
     auditor = OpenGuardAuditor(AuditConfig(offline=True))
+    cached_report: Optional[AuditReport] = None
 
     if secrets:
-        report = auditor.audit(root)
-        res = SecretRemediator().remediate(root, report, apply=apply)
+        cached_report = auditor.audit(root)
+        res = SecretRemediator().remediate(root, cached_report, apply=apply)
         console.print(
             Panel(
                 f"模式: {'[red]实际写入 (已备份至 .openguard_backup)[/red]' if apply else '[yellow]Dry-Run 预览[/yellow]'}\n"
@@ -226,6 +241,21 @@ def autofix(
             console.print(f"\n[bold cyan]>>> {preview.file_path}[/bold cyan] (变量: {', '.join(preview.env_vars_added)})")
             console.print(preview.unified_diff or "(无文本差异)")
 
+    if deps:
+        if cached_report is None:
+            cached_report = auditor.audit(root)
+        dep_res = DependencyRemediator().remediate(root, cached_report, apply=apply)
+        console.print(
+            Panel(
+                f"模式: {'[red]实际写入 (已备份至 .openguard_backup)[/red]' if apply else '[yellow]Dry-Run 预览[/yellow]'}\n"
+                f"涉及清单: {dep_res.files_modified} 个 | 升级组件: {dep_res.packages_upgraded} 项",
+                title="漏洞依赖安全自动升级",
+            )
+        )
+        for preview in dep_res.previews:
+            console.print(f"\n[bold cyan]>>> {preview.file_path}[/bold cyan] ({', '.join(preview.upgraded_packages)})")
+            console.print(preview.unified_diff or "(无文本差异)")
+
     if docs:
         actions = DocGenerator().generate(root, license_id=license_id, apply=apply, force=force)
         doc_tbl = Table(title="开源规范文档自动补齐清单", show_header=True)
@@ -234,6 +264,31 @@ def autofix(
         for fname, status in actions.items():
             doc_tbl.add_row(fname, status)
         console.print(doc_tbl)
+
+
+@app.command()
+def baseline(
+    action: str = typer.Argument("create", help="操作: create (生成存量问题基线快照)"),
+    target: Path = typer.Argument(".", help="目标仓库目录"),
+    output: Path = typer.Option(Path(".openguard-baseline.json"), "--output", "-o", help="基线输出文件路径"),
+    offline: bool = typer.Option(True, "--offline/--online", help="是否仅用离线漏洞库"),
+) -> None:
+    """生成存量风险基线文件，帮助老项目零痛苦接入 OpenGuard CI 门禁（仅拦截新增隐患）。"""
+    if action.lower().strip() != "create":
+        console.print(f"[red]未知 baseline 操作: {action}（当前支持: create）[/red]")
+        raise typer.Exit(code=2)
+    report = OpenGuardAuditor(AuditConfig(offline=offline)).audit(target)
+    saved = save_baseline(report, output)
+    data = json.loads(saved.read_text(encoding="utf-8"))
+    console.print(f"[green]已生成基线快照 ({len(data.get('fingerprints', []))} 条存量指纹):[/green] {saved}")
+
+
+@app.command()
+def mcp() -> None:
+    """启动 OpenGuard MCP Server (JSON-RPC 2.0 stdio)，为 Claude Code / Cursor / Antigravity 提供安全防护工具。"""
+    from openguard.mcp_server import run_stdio_server
+
+    run_stdio_server()
 
 
 @app.command()

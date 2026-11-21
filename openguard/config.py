@@ -85,6 +85,8 @@ class AuditConfig(BaseModel):
     entropy_threshold: float = 3.3
     max_file_size_kb: int = 1024
     staged_only: bool = False
+    diff_ref: Optional[str] = None
+    baseline_path: Optional[str] = None
     project_license_override: Optional[str] = None
     exclude_patterns: List[str] = Field(default_factory=lambda: list(DEFAULT_EXCLUDE_PATTERNS))
     custom_rules: List[Dict[str, Any]] = Field(default_factory=list)

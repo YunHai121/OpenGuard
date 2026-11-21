@@ -11,6 +11,7 @@ from pathlib import Path
 from typing import Dict, List, Optional, Tuple
 
 import networkx as nx
+import yaml
 
 from openguard.config import DEFAULT_EXCLUDE_DIRS, is_path_excluded
 from openguard.models import DependencyComponent
@@ -95,10 +96,16 @@ class DependencyParser:
                     self._parse_requirements_txt(fpath, rel, upsert_component, project_node, edges, graph)
                 elif lower_name == "pyproject.toml":
                     self._parse_pyproject_toml(fpath, rel, upsert_component, project_node, edges, graph)
+                elif lower_name in ("uv.lock", "poetry.lock"):
+                    self._parse_python_toml_lock(fpath, rel, upsert_component, project_node, edges, graph)
                 elif lower_name == "package.json":
                     self._parse_package_json(fpath, rel, upsert_component, project_node, edges, graph)
                 elif lower_name == "package-lock.json":
                     self._parse_package_lock(fpath, rel, upsert_component, project_node, edges, graph)
+                elif lower_name == "yarn.lock":
+                    self._parse_yarn_lock(fpath, rel, upsert_component, project_node, edges, graph)
+                elif lower_name == "pnpm-lock.yaml":
+                    self._parse_pnpm_lock(fpath, rel, upsert_component, project_node, edges, graph)
                 elif lower_name == "go.mod":
                     self._parse_go_mod(fpath, rel, upsert_component, project_node, edges, graph)
                 elif lower_name == "pom.xml":
@@ -457,3 +464,112 @@ class DependencyParser:
                     )
                 )
                 edges.append((proj, comp.name))
+
+    def _parse_python_toml_lock(self, fpath: Path, rel: str, upsert, proj: str, edges, graph) -> None:
+        """Parse `uv.lock` and `poetry.lock` TOML lockfiles with exact transitive dependencies."""
+        try:
+            with fpath.open("rb") as f:
+                data = tomllib.load(f)
+        except Exception:
+            return
+        for pkg in data.get("package", []) or []:
+            if not isinstance(pkg, dict) or "name" not in pkg:
+                continue
+            name = str(pkg["name"]).strip()
+            ver = str(pkg.get("version", "unspecified")).strip()
+            if not name:
+                continue
+            comp = upsert(
+                DependencyComponent(
+                    name=name,
+                    version=ver,
+                    ecosystem="PyPI",
+                    source_file=rel,
+                    direct=False,
+                )
+            )
+            # uv.lock: dependencies = [{name = "..."}] ; poetry.lock: dependencies = {pkg = "^1.0"}
+            deps = pkg.get("dependencies")
+            if isinstance(deps, list):
+                for item in deps:
+                    child = item.get("name") if isinstance(item, dict) else (str(item) if isinstance(item, str) else "")
+                    if child:
+                        edges.append((comp.name, str(child)))
+            elif isinstance(deps, dict):
+                for child in deps.keys():
+                    if str(child).lower() != "python":
+                        edges.append((comp.name, str(child)))
+
+    def _parse_yarn_lock(self, fpath: Path, rel: str, upsert, proj: str, edges, graph) -> None:
+        """Parse yarn.lock (v1 Classic & v2+ Berry) resolved npm package versions."""
+        try:
+            lines = fpath.read_text(encoding="utf-8", errors="replace").splitlines()
+        except OSError:
+            return
+        current_names: List[str] = []
+        header_pkg_re = re.compile(r'["\']?(@?[^@\s,"\']+)@')
+        ver_re = re.compile(r'^\s+version(?:\s+|:\s*)["\']?([^"\'\s]+)["\']?')
+        for line in lines:
+            if not line or line.startswith("#"):
+                continue
+            if not line.startswith((" ", "\t")) and line.rstrip().endswith(":"):
+                current_names = []
+                for part in line.rstrip(":").split(","):
+                    m = header_pkg_re.search(part.strip())
+                    if m and m.group(1) not in current_names:
+                        current_names.append(m.group(1))
+            elif current_names:
+                mv = ver_re.match(line)
+                if mv:
+                    ver = mv.group(1)
+                    for name in current_names:
+                        upsert(
+                            DependencyComponent(
+                                name=name,
+                                version=ver,
+                                ecosystem="npm",
+                                source_file=rel,
+                                direct=False,
+                            )
+                        )
+                    current_names = []
+
+    def _parse_pnpm_lock(self, fpath: Path, rel: str, upsert, proj: str, edges, graph) -> None:
+        """Parse pnpm-lock.yaml (v6 & v9 formats) resolved npm package graph."""
+        try:
+            data = yaml.safe_load(fpath.read_text(encoding="utf-8", errors="replace"))
+        except Exception:
+            return
+        if not isinstance(data, dict):
+            return
+        packages = data.get("packages")
+        if not isinstance(packages, dict):
+            return
+        for raw_key, info in packages.items():
+            key_str = str(raw_key).lstrip("/")
+            # Strip peer-dep suffixes like "(react@18.0.0)" or "_react@18.0.0"
+            clean_key = key_str.split("(", 1)[0].split("_", 1)[0]
+            if "@" not in clean_key:
+                continue
+            # Scoped package `@scope/pkg@1.2.3` vs unscoped `pkg@1.2.3`
+            idx = clean_key.rfind("@")
+            if idx <= 0:
+                continue
+            name = clean_key[:idx]
+            ver = clean_key[idx + 1 :]
+            if not name or not ver:
+                continue
+            comp = upsert(
+                DependencyComponent(
+                    name=name,
+                    version=ver,
+                    ecosystem="npm",
+                    source_file=rel,
+                    direct=False,
+                )
+            )
+            if isinstance(info, dict):
+                sub_deps = info.get("dependencies")
+                if isinstance(sub_deps, dict):
+                    for child in sub_deps.keys():
+                        edges.append((comp.name, str(child)))

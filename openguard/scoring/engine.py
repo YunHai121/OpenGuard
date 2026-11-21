@@ -88,8 +88,16 @@ class ScoringEngine:
         sec_score = _dim_score_from_penalties(sec_penalties)
         sec_count = len(secrets) + len(git_history_secrets)
 
-        # 2. Supply Chain Vulnerability Dimension
-        vuln_penalties = [SEVERITY_PENALTIES.get(_enum_val(v.severity), 10.0) for v in vulnerabilities]
+        # 2. Supply Chain Vulnerability Dimension (reachability-weighted scoring)
+        vuln_penalties: List[float] = []
+        for v in vulnerabilities:
+            base_pen = SEVERITY_PENALTIES.get(_enum_val(v.severity), 10.0)
+            if v.reachability_level == "unreachable" or v.reachable is False:
+                vuln_penalties.append(base_pen * 0.25)
+            elif v.reachability_level == "import_only":
+                vuln_penalties.append(base_pen * 0.65)
+            else:
+                vuln_penalties.append(base_pen)
         vuln_score = _dim_score_from_penalties(vuln_penalties)
 
         # 3. License Compliance Dimension

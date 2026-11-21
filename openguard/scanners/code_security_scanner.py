@@ -65,7 +65,7 @@ class CodeSecurityScanner:
                 rel = fpath.relative_to(root).as_posix()
                 if is_path_excluded(rel, self.config.exclude_patterns):
                     continue
-                if fpath.suffix.lower() in (".py", ".js", ".ts", ".jsx", ".tsx", ".sh"):
+                if fpath.suffix.lower() in (".py", ".js", ".ts", ".jsx", ".tsx", ".sh", ".go"):
                     findings.extend(self.scan_file(fpath, root))
         return findings
 
@@ -85,6 +85,8 @@ class CodeSecurityScanner:
             return self._scan_js_patterns(content, file_path)
         if ext == ".sh":
             return self._scan_shell_patterns(content, file_path)
+        if ext == ".go":
+            return self._scan_go_patterns(content, file_path)
         return []
 
     def _scan_python_ast(self, content: str, file_path: str) -> List[CodeSecurityFinding]:
@@ -345,6 +347,56 @@ class CodeSecurityScanner:
                         snippet=stripped[:180],
                         description="直接将远程脚本管道输入 Shell 执行缺少哈希校验，易受源站或劫持投毒。",
                         remediation="先下载脚本并校验 SHA256 签名后再执行。",
+                    )
+                )
+        return findings
+
+    def _scan_go_patterns(self, content: str, file_path: str) -> List[CodeSecurityFinding]:
+        findings: List[CodeSecurityFinding] = []
+        for idx, line in enumerate(content.splitlines(), start=1):
+            stripped = line.strip()
+            if not stripped or stripped.startswith("//") or "openguard: ignore" in stripped.lower():
+                continue
+            if re.search(r"InsecureSkipVerify\s*:\s*true", line):
+                findings.append(
+                    CodeSecurityFinding(
+                        rule_id="OG-SAST-GO-001",
+                        rule_name="Disabled TLS Certificate Verification in Go (InsecureSkipVerify)",
+                        cwe_id="CWE-295",
+                        severity=Severity.HIGH,
+                        file_path=file_path,
+                        line_number=idx,
+                        snippet=stripped[:180],
+                        description="Go `tls.Config` 启用了 `InsecureSkipVerify: true`，使 HTTPS/TLS 连接易遭中间人攻击。",
+                        remediation="移除 `InsecureSkipVerify: true` 并配置受信任的 `RootCAs`。",
+                    )
+                )
+            if re.search(r'exec\.Command\s*\(\s*"(?:sh|bash|cmd)"\s*,\s*"(?:-c|/C)"', line):
+                findings.append(
+                    CodeSecurityFinding(
+                        rule_id="OG-SAST-GO-002",
+                        rule_name="Go Shell Command Execution Injection Risk",
+                        cwe_id="CWE-78",
+                        severity=Severity.HIGH,
+                        file_path=file_path,
+                        line_number=idx,
+                        snippet=stripped[:180],
+                        description="通过 `exec.Command(\"sh\", \"-c\", ...)` 调用 Shell 解释器执行命令，存在命令注入风险。",
+                        remediation="直接传入目标可执行文件与参数数组 `exec.Command(bin, arg1, arg2)` 避免 Shell 解析。",
+                    )
+                )
+            if re.search(r'"crypto/(?:md5|sha1)"', line):
+                findings.append(
+                    CodeSecurityFinding(
+                        rule_id="OG-SAST-GO-003",
+                        rule_name="Weak Cryptographic Hash Package in Go (crypto/md5 or crypto/sha1)",
+                        cwe_id="CWE-327",
+                        severity=Severity.LOW,
+                        file_path=file_path,
+                        line_number=idx,
+                        snippet=stripped[:180],
+                        description="导入弱散列包 `crypto/md5` 或 `crypto/sha1`，不可用于密码或数字签名场景。",
+                        remediation="改用 `crypto/sha256` 或 `golang.org/x/crypto/argon2`。",
                     )
                 )
         return findings

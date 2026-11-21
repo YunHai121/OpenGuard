@@ -1,0 +1,15 @@
+- id: openguard-staged
+  name: OpenGuard Staged Secret & Supply-Chain Guard
+  description: Fast AST-aware staged-diff secret & compliance gate before git commit.
+  entry: openguard scan . --staged --offline --fail-on high
+  language: python
+  pass_filenames: false
+  stages: [pre-commit]
+
+- id: openguard-full
+  name: OpenGuard Full Repository Security & Compliance Audit
+  description: Full-repository secret, CVE reachability, CI/CD, Dockerfile, and license audit.
+  entry: openguard scan . --offline --fail-on high
+  language: python
+  pass_filenames: false
+  stages: [pre-push]

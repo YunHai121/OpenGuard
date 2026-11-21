@@ -452,6 +452,7 @@ class VulnScanner:
                                 fixed_version=entry["fixed"],
                                 references=[f"https://nvd.nist.gov/vuln/detail/{entry['id']}"],
                                 source="offline_db",
+                                source_file=comp.source_file,
                                 remediation=f"升级 `{comp.name}` 至安全版本 `>={entry['fixed']}`。",
                             )
                         )
@@ -482,6 +483,7 @@ class VulnScanner:
                                 summary=f"疑似投毒/拼写仿冒包 (Typosquatting)：`{comp.name}` 与热门组件 `{pop}` 仅相差 {dist} 个字符。",
                                 fixed_version=f"核验并替换为 `{pop}`",
                                 source="typosquatting",
+                                source_file=comp.source_file,
                                 category=FindingCategory.TYPOSQUATTING,
                                 remediation=f"立即核查 `{comp.source_file}` 中是否误拼写 `{pop}` 为 `{comp.name}`，防范供应链恶意投毒。",
                             )
@@ -545,6 +547,7 @@ class VulnScanner:
                         fixed_version="参阅 OSV 公告",
                         references=[f"https://osv.dev/vulnerability/{vid}"],
                         source="osv_api",
+                        source_file=comp.source_file,
                         remediation=f"升级 `{comp.name}` 至最新已修复版本，详见 https://osv.dev/vulnerability/{vid}。",
                     )
                 )

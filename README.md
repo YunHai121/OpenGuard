@@ -3,6 +3,7 @@
 **面向开源软件供应链的敏感信息检测、许可证合规与工程规范自动化审计平台**
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-emerald.svg)](LICENSE)
+[![CI & Self-Audit](https://github.com/YunHai121/OpenGuard/actions/workflows/openguard.yml/badge.svg)](https://github.com/YunHai121/OpenGuard/actions/workflows/openguard.yml)
 [![Python](https://img.shields.io/badge/Python-3.10%2B%20(Verified%203.14)-blue.svg)](pyproject.toml)
 [![OpenGuard Self-Audit](docs/assets/openguard_badge.svg)](docs/assets/openguard_badge.svg)
 
@@ -23,18 +24,19 @@
    - **三阶降噪引擎**：自动过滤文档字符串（AST Docstring）、`re.compile()` 正则规则定义、`os.getenv()` 调用、占位符词根、UUID 与纯十六进制摘要。
    - **Git 历史回溯（`--git-history`）**：支持挖掘已从最新工作区删除但仍残留在 `.git` 历史 Commit 中的“幽灵密钥”。
 
-2. **7 大生态依赖解析、SBOM 构建与许可证传染性冲突推导**
-   - 零编译静态解析 **PyPI / npm / Go / Maven / Rust / C++ / PHP** 依赖清单与锁文件（`requirements.txt`、`pyproject.toml`、`package-lock.json`、`go.mod`、`pom.xml`、`Cargo.lock` 等），构建 `NetworkX` 依赖有向图并导出 **CycloneDX 1.5** 与 **SPDX 2.3** 标准 SBOM。
+2. **7 大生态依赖解析（含现代锁文件）、SBOM/VEX 构建与许可证传染性冲突推导**
+   - 零编译静态解析 **PyPI / npm / Go / Maven / Rust / C++ / PHP** 依赖清单与现代锁文件（`requirements.txt`、`pyproject.toml`、`uv.lock`、`poetry.lock`、`package-lock.json`、`yarn.lock`、`pnpm-lock.yaml`、`go.mod`、`pom.xml`、`Cargo.lock` 等），构建 `NetworkX` 依赖有向图并导出 **CycloneDX 1.5（含自动 VEX 可利用性分析）** 与 **SPDX 2.3** 标准 SBOM。
    - 支持 **20+ SPDX 主许可证识别（含木兰宽松许可证 `MulanPSL-2.0`）**，通过最短依赖路径算法自动定位 `MIT/Apache-2.0` 项目误引入 `GPL/AGPL/LGPL` 依赖的传染链条。
 
-3. **供应链已知漏洞、安装脚本投毒拦截与源码可达性分析 + AST SAST**
-   - 融合本地高危 CVE 知识库与 OSV.dev 批量接口，结合 **Python/JS/Go 导入级可达性分析**精准区分“已导入调用的可达 CVE”与“未直接引用噪音”（借鉴并改进 Snyk 痛点）。
-   - 静态扫描 `package.json` 生命周期脚本（`postinstall`/`preinstall`）与 `setup.py` 危险系统调用，主动阻断恶意安装载荷（吸收 Socket.dev 核心能力）。
-   - 基于 Levenshtein 编辑距离检测拼写仿冒包（`reqeusts`），内置 Python AST SAST（`CWE-95/502/78/89/295/327/489`）。
+3. **函数级 CVE 可达性、CI/CD 与 Dockerfile 供应链审计 + 多语言 SAST**
+   - 融合本地高危 CVE 知识库与 OSV.dev 批量接口，结合 **Python/JS/Go 函数调用级可达性分析**区分为 `call_reachable` / `import_only` / `unreachable` 三档，自动生成 CycloneDX VEX (`code_not_reachable`) 并对不可达漏洞评分降权。
+   - 静态扫描 `.github/workflows/*.yml`（未锁 40 位 SHA 的 Action、宽泛 `permissions`、`pull_request_target` 风险、表达式注入）、`.gitlab-ci.yml`、`Dockerfile`（`:latest`、root 运行、`ENV` 密钥、`curl | sh`）以及 `package.json` / `setup.py` 安装脚本投毒。
+   - 基于 Levenshtein 编辑距离检测拼写仿冒包（`reqeusts`）与 AI 幻觉包（Slopsquatting），内置 Python AST / JS / Shell / Go SAST。
 
-4. **确定性质量门禁、3 步应急 Runbook 与一键脱敏重构 (`autofix`)**
-   - 5 项硬性发布质量门禁（`PASSED / FAILED`）+ 五维量化得分，每条密钥命中附带厂商级 **3 步吊销与历史清理 Runbook**。
-   - **`autofix` 自动修复**与在线 Triage：支持行内豁免一键写入、硬编码环境变量重构（含 `.openguard_backup/` 回滚）及 `LICENSE`/`CONTRIBUTING.md`/`SECURITY.md`/`CHANGELOG.md`/`.gitlab-ci.yml` 一键补齐。
+4. **Diff-Aware 增量门禁、Baseline 基线、一键修复闭环 (`autofix`) 与 AI MCP Server**
+   - 支持 `--diff origin/main` PR 增量扫描、`openguard baseline create` 存量债务基线、`--format pr-comment` 紧凑 PR 评审评论与 `.pre-commit-hooks.yaml` 零配置接入。
+   - **`autofix` 三位一体自动修复**：支持硬编码密钥环境变量重构（`--secrets`）、漏洞依赖最小安全升级（`--deps`）及开源规范文档补齐（`--docs`），均默认 dry-run Diff 预览并自动备份至 `.openguard_backup/`。
+   - **内置 MCP Server (`openguard mcp`)**：零额外依赖向 Claude Code / Cursor / Antigravity 暴露 `audit_repository`、`audit_code_snippet`、`check_package_safety` 与 `generate_pr_comment` 工具。
 
 5. **极简工程风离线 Web 工作台与多格式报告**
    - 零外网 CDN 依赖的 Light-First 工程界面（支持深色切换与 `Ctrl+K` 全局检索）：包含质量门禁总览、Master-Detail 源码上下文溯源分栏、SVG 依赖传播图与整改前后 Diff 对比。
@@ -67,7 +69,7 @@ flowchart TD
 ### 1. 安装
 
 ```bash
-git clone <repository-url> OpenGuard
+git clone https://github.com/YunHai121/OpenGuard.git
 cd OpenGuard
 pip install -r requirements.txt
 pip install -e . --no-build-isolation --no-deps
@@ -88,18 +90,47 @@ openguard scan demo_outputs/demo_git_repo --git-history --offline
 openguard serve --open
 ```
 
-### 3. 一键自动修复与 Pre-commit 防线
+### 3. 一键自动修复、增量 PR 门禁与 Pre-commit 防线
 
 ```bash
-# 预览脱敏修改与缺失开源文档差异
-openguard autofix path/to/your_repo --secrets --docs --license MIT
+# 预览硬编码密钥重构、漏洞依赖升级与缺失开源文档差异（加 --apply 执行写入）
+openguard autofix path/to/your_repo --secrets --deps --docs --license MIT
+
+# 老项目零痛苦接入：生成基线 + Diff-Aware PR 增量扫描 + 生成 PR 评审评论
+openguard baseline create path/to/your_repo -o .openguard-baseline.json
+openguard scan path/to/your_repo --diff origin/main --baseline .openguard-baseline.json --format pr-comment -o pr_comment.md
 
 # 安装提交前防泄密 Git Hook 与 git.hust.edu.cn GitLab CI
 openguard hook install path/to/your_repo
 openguard hook ci path/to/your_repo --ci-platform gitlab
 ```
 
-### 4. Python SDK 第三方集成
+也支持直接通过 `.pre-commit-config.yaml` 零配置接入任何 GitHub 仓库：
+
+```yaml
+repos:
+  - repo: https://github.com/YunHai121/OpenGuard
+    rev: v1.2.0
+    hooks:
+      - id: openguard-staged
+```
+
+### 4. AI 编程助手 MCP Server 集成（Claude Code / Cursor / Antigravity）
+
+```json
+{
+  "mcpServers": {
+    "openguard": {
+      "command": "openguard",
+      "args": ["mcp"]
+    }
+  }
+}
+```
+
+接入后，AI 编程助手可在写入代码或执行 `pip install` / `npm install` 前自动调用 `audit_code_snippet`、`check_package_safety`（防仿冒包与 AI 幻觉包 Slopsquatting）与 `audit_repository`。
+
+### 5. Python SDK 第三方集成
 
 ```python
 from openguard import AuditConfig, OpenGuardAuditor

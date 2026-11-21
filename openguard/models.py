@@ -132,8 +132,11 @@ class VulnerabilityFinding(BaseModel):
     source: str = "offline_db"
     category: FindingCategory = FindingCategory.VULNERABILITY
     remediation: str = ""
+    source_file: str = ""
     reachable: Optional[bool] = None
+    reachability_level: str = "unknown"  # "call_reachable" | "import_only" | "unreachable" | "unknown"
     import_locations: List[str] = Field(default_factory=list)
+    call_locations: List[str] = Field(default_factory=list)
 
 
 class CodeSecurityFinding(BaseModel):
@@ -215,7 +218,7 @@ class AuditReport(BaseModel):
 
     model_config = ConfigDict(use_enum_values=True)
 
-    tool_version: str = "1.1.0"
+    tool_version: str = "1.2.0"
     scan_id: str = Field(default_factory=lambda: f"OG-{uuid4().hex[:10].upper()}")
     scanned_at: str = Field(
         default_factory=lambda: datetime.now(timezone.utc).astimezone().isoformat(timespec="seconds")
@@ -225,6 +228,7 @@ class AuditReport(BaseModel):
     project_license: str = "UNKNOWN"
     git_branch: Optional[str] = None
     git_commit: Optional[str] = None
+    diff_base_ref: Optional[str] = None
     summary: AuditSummary
     secrets: List[SecretFinding] = Field(default_factory=list)
     git_history_secrets: List[SecretFinding] = Field(default_factory=list)
@@ -236,3 +240,4 @@ class AuditReport(BaseModel):
     governance_checks: List[GovernanceCheckItem] = Field(default_factory=list)
     suppressed_count: int = 0
     suppressed_samples: List[Dict[str, Any]] = Field(default_factory=list)
+    baseline_suppressed_count: int = 0

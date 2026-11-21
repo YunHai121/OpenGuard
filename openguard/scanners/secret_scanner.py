@@ -181,52 +181,68 @@ class SecretScanner:
         return self.scan_content(content, rel_path)
 
     def scan_staged_diff(self, repo_path: Path) -> SecretScanOutcome:
-        """Scan only git-staged added lines (`git diff --cached -U0`) for fast pre-commit hooks."""
-        res = subprocess.run(
-            ["git", "diff", "--cached", "-U0", "--no-color"],
-            cwd=str(repo_path),
-            capture_output=True,
-            text=True,
-            encoding="utf-8",
-            errors="replace",
-        )
-        if res.returncode != 0:
-            return SecretScanOutcome(findings=[])
+        """Scan git-staged added lines with full-file AST context preserved (for pre-commit)."""
+        from openguard.baseline import get_git_diff_added_lines
 
-        current_file = ""
-        current_line = 0
-        file_lines_map: Dict[str, List[Tuple[int, str]]] = {}
+        added_map = get_git_diff_added_lines(repo_path, staged=True)
+        return self.scan_diff_lines(repo_path, added_map, staged=True)
 
-        for raw_line in res.stdout.splitlines():
-            if raw_line.startswith("+++ b/"):
-                current_file = raw_line[6:].strip()
-            elif raw_line.startswith("@@ "):
-                m = re.search(r"\+(\d+)", raw_line)
-                if m:
-                    current_line = int(m.group(1))
-            elif raw_line.startswith("+") and not raw_line.startswith("+++"):
-                if current_file and not is_path_excluded(current_file, self.config.exclude_patterns):
-                    file_lines_map.setdefault(current_file, []).append((current_line, raw_line[1:]))
-                current_line += 1
-
+    def scan_diff_lines(
+        self,
+        repo_path: Path,
+        added_lines_map: Dict[str, set[int]],
+        staged: bool = False,
+    ) -> SecretScanOutcome:
+        """Scan changed files using full-file AST context and keep only findings on added lines."""
         all_findings: List[SecretFinding] = []
         suppressed_count = 0
         suppressed_samples: List[Dict[str, Any]] = []
         lines_scanned = 0
+        files_scanned = 0
 
-        for rel_file, numbered_lines in file_lines_map.items():
-            lines_scanned += len(numbered_lines)
-            for ln, text_line in numbered_lines:
-                sub = self.scan_content(text_line, rel_file, line_offset=ln - 1)
-                all_findings.extend(sub.findings)
-                suppressed_count += sub.suppressed_count
-                suppressed_samples.extend(sub.suppressed_samples)
+        for rel_file, added_line_nums in added_lines_map.items():
+            if not added_line_nums or is_path_excluded(rel_file, self.config.exclude_patterns):
+                continue
+
+            content: Optional[str] = None
+            if staged:
+                res = subprocess.run(
+                    ["git", "show", f":{rel_file}"],
+                    cwd=str(repo_path),
+                    capture_output=True,
+                )
+                if res.returncode == 0 and b"\x00" not in res.stdout[:4096]:
+                    content = res.stdout.decode("utf-8", errors="replace")
+
+            if content is None:
+                fpath = (repo_path / rel_file).resolve()
+                if not fpath.is_file():
+                    continue
+                try:
+                    raw_bytes = fpath.read_bytes()
+                    if b"\x00" in raw_bytes[:4096]:
+                        continue
+                    content = raw_bytes.decode("utf-8", errors="replace")
+                except OSError:
+                    continue
+
+            files_scanned += 1
+            lines_scanned += len(added_line_nums)
+            sub = self.scan_content(content, rel_file)
+            for f in sub.findings:
+                if f.line_number in added_line_nums:
+                    all_findings.append(f)
+            for s in sub.suppressed_samples:
+                if s.get("line_number") in added_line_nums:
+                    suppressed_count += 1
+                    if len(suppressed_samples) < 25:
+                        suppressed_samples.append(s)
 
         return SecretScanOutcome(
             findings=all_findings,
             suppressed_count=suppressed_count,
-            suppressed_samples=suppressed_samples[:25],
-            files_scanned=len(file_lines_map),
+            suppressed_samples=suppressed_samples,
+            files_scanned=files_scanned,
             lines_scanned=lines_scanned,
         )
 

@@ -12,17 +12,21 @@ import time
 from pathlib import Path
 from typing import Dict, List, Optional
 
+from openguard.baseline import filter_by_baseline, get_git_diff_added_lines, load_baseline
 from openguard.config import AuditConfig, load_config
 from openguard.models import AuditReport
+from openguard.remediation.dep_remediator import DependencyRemediator, DepRemediationResult
 from openguard.remediation.doc_generator import DocGenerator
 from openguard.remediation.secret_remediator import RemediationResult, SecretRemediator
 from openguard.reporters.badge_generator import render_badge_svg
 from openguard.reporters.html_reporter import render_html_report
-from openguard.reporters.markdown_reporter import render_markdown_report
+from openguard.reporters.markdown_reporter import render_markdown_report, render_pr_comment
 from openguard.reporters.pdf_reporter import render_pdf_bytes
 from openguard.reporters.sarif_sbom_reporter import render_cyclonedx, render_sarif, render_spdx
+from openguard.scanners.ci_workflow_scanner import CIWorkflowScanner
 from openguard.scanners.code_security_scanner import CodeSecurityScanner
 from openguard.scanners.dependency_parser import DependencyParser
+from openguard.scanners.dockerfile_scanner import DockerfileScanner
 from openguard.scanners.git_history_scanner import GitHistoryScanner
 from openguard.scanners.governance_checker import GovernanceChecker
 from openguard.scanners.install_script_scanner import InstallScriptScanner
@@ -96,16 +100,26 @@ class OpenGuardAuditor:
                 if pat not in cfg.exclude_patterns:
                     cfg.exclude_patterns.append(pat)
 
+        # 0. Optional Diff-Aware Incremental Scope (--diff <base_ref>)
+        diff_added_map = (
+            get_git_diff_added_lines(repo_root, base_ref=cfg.diff_ref)
+            if (cfg.diff_ref and not resolved.is_file())
+            else None
+        )
+
         # 1. Secret detection (3-Stage Hybrid Pipeline)
         secret_scanner = SecretScanner(cfg)
-        secret_outcome = secret_scanner.scan_directory(resolved)
+        if diff_added_map is not None:
+            secret_outcome = secret_scanner.scan_diff_lines(repo_root, diff_added_map, staged=False)
+        else:
+            secret_outcome = secret_scanner.scan_directory(resolved)
         head_hashes = {f.raw_hash for f in secret_outcome.findings}
 
         # 2. Git metadata & optional Git commit history ghost-secret scanning
         git_scanner = GitHistoryScanner(cfg, secret_scanner)
         git_branch, git_commit = git_scanner.get_git_metadata(repo_root)
         git_history_findings = []
-        if cfg.include_git_history and not resolved.is_file():
+        if cfg.include_git_history and not resolved.is_file() and diff_added_map is None:
             git_history_findings = git_scanner.scan_history(repo_root, head_secret_hashes=head_hashes)
 
         # 3. Multi-ecosystem Dependency Parsing -> SBOM + NetworkX Graph
@@ -128,7 +142,7 @@ class OpenGuardAuditor:
         install_script_alerts = InstallScriptScanner().scan_repository(resolved, exclude_patterns=cfg.exclude_patterns)
         vulnerabilities.extend(install_script_alerts)
 
-        # 5b. Import-level CVE & Component Reachability Enrichment
+        # 5b. Import- & Call-Graph CVE Reachability Enrichment
         ReachabilityAnalyzer().enrich(
             resolved,
             components=components,
@@ -136,9 +150,47 @@ class OpenGuardAuditor:
             exclude_patterns=cfg.exclude_patterns,
         )
 
-        # 6. Static Application Security Testing (SAST)
+        # 6. Static Application Security Testing (SAST + CI/CD Workflow + Dockerfile)
         code_scanner = CodeSecurityScanner(cfg)
         code_findings = code_scanner.scan_directory(resolved)
+        code_findings.extend(CIWorkflowScanner().scan_repository(resolved, exclude_patterns=cfg.exclude_patterns))
+        code_findings.extend(DockerfileScanner().scan_repository(resolved, exclude_patterns=cfg.exclude_patterns))
+
+        # Apply Diff-Aware filtering to SAST / CI / Docker & manifest findings when --diff is active
+        if diff_added_map is not None:
+            changed_files = set(diff_added_map.keys())
+            code_findings = [
+                cs
+                for cs in code_findings
+                if cs.file_path in diff_added_map
+                and (cs.line_number in diff_added_map[cs.file_path] or cs.line_number == 1)
+            ]
+            vulnerabilities = [
+                v for v in vulnerabilities if (not v.source_file) or (v.source_file in changed_files)
+            ]
+
+        # 6b. Optional Baseline Suppression (Semgrep/Gitleaks-style legacy debt suppression)
+        baseline_suppressed = 0
+        if cfg.baseline_path:
+            bpath = Path(cfg.baseline_path)
+            if not bpath.is_absolute():
+                bpath = (repo_root / bpath).resolve()
+            fps = load_baseline(bpath)
+            (
+                secret_outcome.findings,
+                git_history_findings,
+                vulnerabilities,
+                license_conflicts,
+                code_findings,
+                baseline_suppressed,
+            ) = filter_by_baseline(
+                secrets=secret_outcome.findings,
+                git_history_secrets=git_history_findings,
+                vulnerabilities=vulnerabilities,
+                license_conflicts=license_conflicts,
+                code_security_findings=code_findings,
+                baseline_fingerprints=fps,
+            )
 
         # 7. Open-Source Engineering Governance Checklist
         gov_checker = GovernanceChecker()
@@ -166,6 +218,7 @@ class OpenGuardAuditor:
             project_license=project_license,
             git_branch=git_branch,
             git_commit=git_commit,
+            diff_base_ref=cfg.diff_ref,
             summary=summary,
             secrets=secret_outcome.findings,
             git_history_secrets=git_history_findings,
@@ -177,6 +230,7 @@ class OpenGuardAuditor:
             governance_checks=governance_checks,
             suppressed_count=secret_outcome.suppressed_count,
             suppressed_samples=secret_outcome.suppressed_samples,
+            baseline_suppressed_count=baseline_suppressed,
         )
 
     def audit_snippet(self, code: str, filename: str = "snippet.py") -> AuditReport:
@@ -229,6 +283,12 @@ class OpenGuardAuditor:
         """Preview or create missing open-source governance documents."""
         return DocGenerator().generate(Path(target).resolve(), license_id=license_id, apply=apply, force=force)
 
+    def autofix_deps(self, target: str | Path, apply: bool = False) -> DepRemediationResult:
+        """Preview or apply safe minimum dependency upgrades for vulnerable manifest entries."""
+        root = Path(target).resolve()
+        report = self.audit(root)
+        return DependencyRemediator().remediate(root, report, apply=apply)
+
     @staticmethod
     def export_report(report: AuditReport, fmt: str, output_path: Path) -> List[Path]:
         """Export an `AuditReport` into one or all supported formats (`html`, `pdf`, `json`, `sarif`, `md`, `cyclonedx`, `spdx`, `badge`, `all`)."""
@@ -261,6 +321,8 @@ class OpenGuardAuditor:
             out.write_bytes(render_pdf_bytes(report))
         elif fmt_lower in ("md", "markdown"):
             out.write_text(render_markdown_report(report), encoding="utf-8")
+        elif fmt_lower in ("pr-comment", "pr_comment"):
+            out.write_text(render_pr_comment(report), encoding="utf-8")
         elif fmt_lower == "sarif":
             out.write_text(json.dumps(render_sarif(report), indent=2, ensure_ascii=False), encoding="utf-8")
         elif fmt_lower == "cyclonedx":

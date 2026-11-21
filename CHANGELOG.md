@@ -2,6 +2,16 @@
 
 All notable changes to **OpenGuard (开源卫士)** are documented in this file following [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and Semantic Versioning.
 
+## [1.2.0] - 2026-11-21
+
+### Added
+- **CI/CD 供应链安全审计器 (`CIWorkflowScanner`)**：对标 OpenSSF Scorecard / Zizmor，静态审计 `.github/workflows/*.yml` 与 `.gitlab-ci.yml`，检出未锁定 40 位 Commit SHA 的第三方 Action、过宽/缺失的 `GITHUB_TOKEN permissions`、`pull_request_target` 不受控 PR 检出、`${{ github.event.* }}` 脚本注入与 `curl | sh` 管道执行；同时完成 OpenGuard 自家工作流 SHA 锁定与 GitHub Code Scanning SARIF 上传加固。
+- **函数调用级可达性与自动 CycloneDX VEX (`ReachabilityAnalyzer` + `sarif_sbom_reporter`)**：在导入级基础上增加 AST 别名追踪与危险符号调用点分析（区分为 `call_reachable` / `import_only` / `unreachable` 三档，并精准识别 `yaml.safe_load` / `Loader=SafeLoader`），自动在 CycloneDX 1.5 中生成 VEX `analysis` 声明（`exploitable` / `in_triage` / `not_affected` + `code_not_reachable`），并修复 SARIF 漏洞定位到真实依赖清单文件。
+- **现代锁文件解析与容器安全扫描 (`DockerfileScanner`)**：新增 `uv.lock`、`poetry.lock`、`yarn.lock`、`pnpm-lock.yaml` 精确传递依赖解析；新增 `Dockerfile` 安全审计（`:latest` / 未锁标签、root 运行、构建期 `curl | sh`、`ENV/ARG` 硬编码密钥、`ADD http`）以及 Go SAST 规则（`InsecureSkipVerify`、`exec.Command("sh", "-c")`、弱哈希）。
+- **Diff-Aware PR 增量扫描、基线管理与 PR 评论导出**：支持 `--diff <base_ref>` 增量审计、`openguard baseline create` + `--baseline` 存量债务静默机制、`--format pr-comment` 紧凑 PR 评审 Markdown；同步修复 `--staged` 模式下保留全文件 AST 上下文过滤。
+- **漏洞依赖一键安全升级 (`openguard autofix --deps`)**：自动针对 `requirements.txt` / `pyproject.toml` / `package.json` 生成最小安全版本升级 Diff 并支持 `--apply` 写入与 `.openguard_backup` 备份。
+- **面向 AI 编程助手的内置 MCP Server (`openguard mcp`) 与 `.pre-commit-hooks.yaml`**：零额外依赖实现 JSON-RPC 2.0 stdio MCP 服务，暴露 `audit_repository`、`audit_code_snippet`、`check_package_safety`（含 AI 幻觉包 Slopsquatting 防护）与 `generate_pr_comment`；新增 `.pre-commit-hooks.yaml` 实现全网 GitHub 仓库 10 秒零配置接入。
+
 ## [1.1.0] - 2026-11-20
 
 ### Added

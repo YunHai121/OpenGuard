@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "openguard"
-version = "1.1.0"
+version = "1.2.0"
 description = "OpenGuard (开源卫士) — 面向开源软件供应链的敏感信息检测、许可证合规与工程规范自动化审计平台"
 readme = "README.md"
 license = { text = "MIT" }

@@ -71,13 +71,15 @@ def render_sarif(report: AuditReport) -> Dict[str, Any]:
 
     for v in report.vulnerabilities:
         add_rule(v.id, f"Dependency Vulnerability {v.id}", v.summary, "CWE-1104")
+        uri = v.source_file or (v.import_locations[0].split(":")[0] if v.import_locations else "dependencies")
+        reach_tag = f" [reachability={v.reachability_level}]" if v.reachability_level != "unknown" else ""
         results.append(
             {
                 "ruleId": v.id,
                 "level": _sarif_level(str(v.severity)),
-                "message": {"text": f"{v.component_name}@{v.component_version}: {v.summary}"},
+                "message": {"text": f"{v.component_name}@{v.component_version}: {v.summary}{reach_tag}"},
                 "locations": [
-                    {"physicalLocation": {"artifactLocation": {"uri": "dependencies"}, "region": {"startLine": 1}}}
+                    {"physicalLocation": {"artifactLocation": {"uri": uri}, "region": {"startLine": 1}}}
                 ],
             }
         )
@@ -150,16 +152,34 @@ def render_cyclonedx(report: AuditReport) -> Dict[str, Any]:
 
     vulns_json: List[Dict[str, Any]] = []
     for v in report.vulnerabilities:
-        vulns_json.append(
-            {
-                "id": v.id,
-                "source": {"name": v.source},
-                "ratings": [{"severity": str(v.severity).lower(), "score": v.cvss_score}],
-                "description": v.summary,
-                "recommendation": v.remediation,
-                "affects": [{"ref": comp_ref_by_name.get(v.component_name, v.component_name)}],
+        vuln_entry: Dict[str, Any] = {
+            "id": v.id,
+            "source": {"name": v.source},
+            "ratings": [{"severity": str(v.severity).lower(), "score": v.cvss_score}],
+            "description": v.summary,
+            "recommendation": v.remediation,
+            "affects": [{"ref": comp_ref_by_name.get(v.component_name, v.component_name)}],
+        }
+        # Auto-generated CycloneDX 1.5 VEX analysis derived from OpenGuard Call-Graph Reachability
+        if v.reachability_level == "unreachable" or v.reachable is False:
+            vuln_entry["analysis"] = {
+                "state": "not_affected",
+                "justification": "code_not_reachable",
+                "detail": f"OpenGuard static reachability analysis found no imports of `{v.component_name}` in source code.",
             }
-        )
+        elif v.reachability_level == "call_reachable":
+            loc_str = ", ".join(v.call_locations[:5] or v.import_locations[:5])
+            vuln_entry["analysis"] = {
+                "state": "exploitable",
+                "detail": f"Vulnerable symbol directly invoked in source code ({loc_str}).",
+            }
+        elif v.reachability_level == "import_only":
+            loc_str = ", ".join(v.import_locations[:5])
+            vuln_entry["analysis"] = {
+                "state": "in_triage",
+                "detail": f"Package imported at {loc_str}, but no direct call to known vulnerable symbol was observed.",
+            }
+        vulns_json.append(vuln_entry)
 
     return {
         "bomFormat": "CycloneDX",
