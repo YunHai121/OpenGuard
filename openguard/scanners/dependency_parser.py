@@ -1,4 +1,4 @@
-"""Multi-ecosystem dependency manifest parser and NetworkX DAG builder (7 ecosystems)."""
+"""Multi-ecosystem dependency manifest & lockfile parser and NetworkX DAG builder (10 ecosystems)."""
 
 from __future__ import annotations
 
@@ -36,6 +36,9 @@ def _make_purl(ecosystem: str, name: str, version: str) -> str:
         "crates.io": "cargo",
         "C/C++": "generic",
         "Packagist": "composer",
+        "RubyGems": "gem",
+        "NuGet": "nuget",
+        "GitHub Actions": "githubactions",
     }
     ns = eco_map.get(ecosystem, ecosystem.lower())
     return f"pkg:{ns}/{name}@{clean_ver}" if clean_ver else f"pkg:{ns}/{name}"
@@ -108,6 +111,8 @@ class DependencyParser:
                     self._parse_pnpm_lock(fpath, rel, upsert_component, project_node, edges, graph)
                 elif lower_name == "go.mod":
                     self._parse_go_mod(fpath, rel, upsert_component, project_node, edges, graph)
+                elif lower_name == "go.sum":
+                    self._parse_go_sum(fpath, rel, upsert_component, project_node, edges, graph)
                 elif lower_name == "pom.xml":
                     self._parse_pom_xml(fpath, rel, upsert_component, project_node, edges, graph)
                 elif lower_name in ("build.gradle", "build.gradle.kts"):
@@ -122,6 +127,17 @@ class DependencyParser:
                     self._parse_cmake(fpath, rel, upsert_component, project_node, edges, graph)
                 elif lower_name == "composer.json":
                     self._parse_composer_json(fpath, rel, upsert_component, project_node, edges, graph)
+                elif lower_name == "composer.lock":
+                    self._parse_composer_lock(fpath, rel, upsert_component, project_node, edges, graph)
+                elif lower_name == "gemfile.lock":
+                    self._parse_gemfile_lock(fpath, rel, upsert_component, project_node, edges, graph)
+                elif lower_name.endswith(".csproj"):
+                    self._parse_csproj(fpath, rel, upsert_component, project_node, edges, graph)
+                elif (
+                    ".github/workflows/" in f"/{rel.lower()}"
+                    and lower_name.endswith((".yml", ".yaml"))
+                ):
+                    self._parse_github_workflow_actions(fpath, rel, upsert_component, project_node, edges, graph)
 
         # Deduplicate edges cleanly
         unique_edges: List[Tuple[str, str]] = []
@@ -573,3 +589,151 @@ class DependencyParser:
                 if isinstance(sub_deps, dict):
                     for child in sub_deps.keys():
                         edges.append((comp.name, str(child)))
+
+    def _parse_go_sum(self, fpath: Path, rel: str, upsert, proj: str, edges, graph) -> None:
+        """Parse Go `go.sum` lockfile for exact transitive module versions."""
+        try:
+            lines = fpath.read_text(encoding="utf-8", errors="replace").splitlines()
+        except OSError:
+            return
+        for raw in lines:
+            parts = raw.strip().split()
+            if len(parts) < 2:
+                continue
+            mod_name, raw_ver = parts[0], parts[1]
+            ver = raw_ver.removesuffix("/go.mod").lstrip("v")
+            if not mod_name or not ver:
+                continue
+            upsert(
+                DependencyComponent(
+                    name=mod_name,
+                    version=ver,
+                    ecosystem="Go",
+                    source_file=rel,
+                    direct=False,
+                )
+            )
+
+    def _parse_gemfile_lock(self, fpath: Path, rel: str, upsert, proj: str, edges, graph) -> None:
+        """Parse Ruby Bundler `Gemfile.lock` GEM specs & transitive dependency edges."""
+        try:
+            lines = fpath.read_text(encoding="utf-8", errors="replace").splitlines()
+        except OSError:
+            return
+        in_specs = False
+        current_gem: Optional[str] = None
+        spec_re = re.compile(r"^    ([A-Za-z0-9._\-]+)\s+\(([^)]+)\)\s*$")
+        dep_re = re.compile(r"^      ([A-Za-z0-9._\-]+)")
+        for line in lines:
+            if line.strip() == "specs:":
+                in_specs = True
+                current_gem = None
+                continue
+            if in_specs and line and not line.startswith(" "):
+                in_specs = False
+                current_gem = None
+                continue
+            if not in_specs:
+                continue
+            ms = spec_re.match(line)
+            if ms:
+                name, ver = ms.group(1), ms.group(2)
+                comp = upsert(
+                    DependencyComponent(
+                        name=name,
+                        version=ver,
+                        ecosystem="RubyGems",
+                        source_file=rel,
+                        direct=False,
+                    )
+                )
+                current_gem = comp.name
+                continue
+            if current_gem:
+                md = dep_re.match(line)
+                if md:
+                    edges.append((current_gem, md.group(1)))
+
+    def _parse_composer_lock(self, fpath: Path, rel: str, upsert, proj: str, edges, graph) -> None:
+        """Parse PHP Composer `composer.lock` with exact versions, SPDX licenses, and edges."""
+        try:
+            data = json.loads(fpath.read_text(encoding="utf-8", errors="replace"))
+        except Exception:
+            return
+        for sec in ("packages", "packages-dev"):
+            for pkg in data.get(sec, []) or []:
+                if not isinstance(pkg, dict) or "name" not in pkg:
+                    continue
+                name = str(pkg["name"])
+                ver = str(pkg.get("version", "unspecified")).lstrip("v")
+                lics = pkg.get("license") or []
+                lic_id = str(lics[0]) if (isinstance(lics, list) and lics) else "UNKNOWN"
+                comp = upsert(
+                    DependencyComponent(
+                        name=name,
+                        version=ver,
+                        ecosystem="Packagist",
+                        source_file=rel,
+                        direct=False,
+                        license_id=lic_id,
+                        license_source="composer.lock" if lic_id != "UNKNOWN" else "unknown",
+                    )
+                )
+                req = pkg.get("require")
+                if isinstance(req, dict):
+                    for child in req.keys():
+                        if child != "php" and not str(child).startswith("ext-"):
+                            edges.append((comp.name, str(child)))
+
+    def _parse_csproj(self, fpath: Path, rel: str, upsert, proj: str, edges, graph) -> None:
+        """Parse .NET `*.csproj` NuGet `<PackageReference>` XML entries."""
+        try:
+            tree = ET.parse(fpath)
+            root_el = tree.getroot()
+        except Exception:
+            return
+        for elem in root_el.iter():
+            tag_name = elem.tag.split("}", 1)[-1]
+            if tag_name != "PackageReference":
+                continue
+            name = (elem.attrib.get("Include") or elem.attrib.get("Update") or "").strip()
+            ver = (elem.attrib.get("Version") or elem.findtext("Version") or "unspecified").strip()
+            if name:
+                comp = upsert(
+                    DependencyComponent(
+                        name=name,
+                        version=ver,
+                        ecosystem="NuGet",
+                        source_file=rel,
+                        direct=True,
+                    )
+                )
+                edges.append((proj, comp.name))
+
+    def _parse_github_workflow_actions(self, fpath: Path, rel: str, upsert, proj: str, edges, graph) -> None:
+        """Index third-party GitHub Actions (`uses: owner/repo@ref`) as `pkg:githubactions` SBOM components."""
+        try:
+            content = fpath.read_text(encoding="utf-8", errors="replace")
+        except OSError:
+            return
+        uses_re = re.compile(r"^\s*-?\s*uses\s*:\s*['\"]?([^'\"#\s]+)['\"]?")
+        for raw in content.splitlines():
+            m = uses_re.match(raw)
+            if not m:
+                continue
+            ref_str = m.group(1)
+            if ref_str.startswith("./") or ref_str.startswith("docker://") or "@" not in ref_str:
+                continue
+            action_name, ref_ver = ref_str.rsplit("@", 1)
+            if not action_name or not ref_ver:
+                continue
+            comp = upsert(
+                DependencyComponent(
+                    name=action_name,
+                    version=ref_ver,
+                    ecosystem="GitHub Actions",
+                    source_file=rel,
+                    direct=True,
+                )
+            )
+            edges.append((proj, comp.name))

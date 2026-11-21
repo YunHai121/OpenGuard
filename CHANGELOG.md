@@ -5,6 +5,8 @@ All notable changes to **OpenGuard (开源卫士)** are documented in this file 
 ## [Unreleased]
 
 ### Added
+- **10 生态 SBOM 扩展（对标 Syft / OSV-SCALIBR）**：新增 GitHub Actions 工作流（`pkg:githubactions`）、`go.sum`、`Gemfile.lock`（RubyGems）、`composer.lock`（含许可证与传递边）及 `.NET *.csproj`（NuGet）解析器。
+- **Web 工作台与 API 对齐（对标 Socket / Dependency-Track / Snyk）**：新增 3 级 Call-Graph/VEX 状态徽章、`CI / 容器 / AI 安全` 独立筛选标签、Web 端一键依赖升级（`fix_deps` Diff 预览/应用）、`PR / MR 评审评论` 导出以及实时检测台 Go/`.cursorrules` 场景支持；同步修复 Windows `NO_PROXY=[::1]` 下 OSV 客户端初始化兼容性。
 - **AI 供应链安全审计器 (`AIConfigSecurityScanner`)**：检测隐藏 Unicode Tag Block (`U+E0000–U+E007F`) 隐写并自动解码载荷预览（`OG-AI-001`）、Trojan Source 双向控制符与零宽字符混淆（`OG-AI-002`）、`.cursorrules`/`CLAUDE.md`/`AGENTS.md` 间接提示词注入后门（`OG-AI-003`）以及 `.mcp.json` 配置投毒与未锁版本 `npx`/`uvx` Rug-Pull 风险（`OG-AI-004`）。
 - **离线 CRC32 凭据校验与 GitLab Routable Token 支持**：新增 GitHub (`ghp_`/`gho_`/`ghu_`/`ghs_`/`ghr_`) 与 npm (`npm_`) Token 的 Base62 CRC32 离线校验（真实凭据置信度跃升并标记 `verified_crc32_checksum`，测试/文档中的伪造 Token 自动降噪过滤），并修复 GitLab 17+ 多段式 Routable Token（含 `.01.`）匹配截断问题。
 

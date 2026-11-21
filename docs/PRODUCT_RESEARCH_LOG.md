@@ -28,9 +28,9 @@
 - ~~**TruffleHog v3 / Kingfisher / GitGuardian**：离线凭据格式校验~~（已在 Round #2 落地 GitHub/npm CRC32 校验与 GitLab Routable Token 适配）
 - ~~**AI Agent / LLM 供应链安全（2026 新赛道）**：Rules-File Backdoor / 隐蔽 Unicode / MCP 配置投毒检测~~（已在 Round #2 落地 `AIConfigSecurityScanner`）
 - **SLSA / Sigstore / Cosign / GitHub Artifact Attestations**：构建来源证明（Provenance）、SBOM 完整性签名校验与发布产物防篡改检查；
-- **OSV-SCALIBR / Syft / Grype**：更多生态（`go.sum`、`Gemfile.lock`、`composer.lock`、`.NET *.csproj / packages.lock.json`、GitHub Actions `uses` 纳入 SBOM 组件图）；
+- ~~**OSV-SCALIBR / Syft / Grype**：更多生态（`go.sum`、`Gemfile.lock`、`composer.lock`、`.NET *.csproj`、GitHub Actions `uses` 纳入 SBOM 组件图）~~（已在 Round #3 落地 10 生态 SBOM 扩展）
 - **SonarQube / CodeQL / Bandit / Semgrep Taint**：Python/JS 跨语句污点传播（Taint Tracking，区分常量字符串与外部用户输入，进一步压低 SAST 误报）；
-- **Web 工作台产品体验对标（Socket / Snyk / Dependency-Track）**：前端实时展示 Call-Graph 可达性徽章、VEX 状态筛选、CI/Dockerfile/AI-Config 分类视图与依赖一键升级面板。
+- ~~**Web 工作台产品体验对标（Socket / Snyk / Dependency-Track）**：前端实时展示 Call-Graph 可达性徽章、VEX 状态筛选、CI/Dockerfile/AI-Config 分类视图与依赖一键升级面板~~（已在 Round #3 落地）
 
 ---
 
@@ -53,3 +53,24 @@
 ### 验证结果
 - 新增单元测试文件 `tests/test_v12_ai_and_checksum.py`（6 项核心测试），全量单测增至 **78 / 78 通过**；
 - 自身审计：**100.0/100 (A+)**，**Quality Gate: PASSED**（63 文件 / 13024 行，0 告警）。
+
+---
+
+## Round #3 — 2026-11-21 22:28–22:34
+
+### 本轮重点对标产品
+- **Anchore Syft / Google OSV-SCALIBR**：将 GitHub Actions 工作流第三方 `uses` 纳入标准 SBOM（`pkg:githubactions/owner/repo@ref`），并扩展多语言精确锁文件解析覆盖面（`go.sum`、`Gemfile.lock`、`composer.lock`、`.NET *.csproj`）。
+- **Dependency-Track / Socket.dev / Snyk Web UX**：在 Web 工作台突出“上下文可利用性（VEX + Call-Graph Reachability）”以消除告警疲劳，并提供最小破坏性依赖安全升级 Diff 预览与一键 PR 评论导出。
+
+### 核心发现与已落地改进
+1. **10 生态 SBOM 扩展（`openguard/scanners/dependency_parser.py`）**：
+   - 新增 **GitHub Actions (`pkg:githubactions`)**、**RubyGems (`Gemfile.lock` / `pkg:gem`)**、**.NET NuGet (`*.csproj` / `pkg:nuget`)**、**Go `go.sum`** 与 **PHP `composer.lock`（含 SPDX 许可证与传递边）** 解析器，生态支持由 7 个扩展至 **10 个**；
+   - 顺带加固 `openguard/scanners/vuln_scanner.py` 中 `httpx.Client` 在 Windows `NO_PROXY=[::1]` 环境变量下的容错回退（`trust_env=False`）。
+2. **Web 工作台与 API 全功能对齐（`openguard/web/app.py`、`openguard/web/static/index.html`、`app.js`）**：
+   - 漏洞溯源面板升级为 **3 级 Call-Graph 可达性 + VEX 状态徽章**（`CALL REACHABLE · VEX: exploitable` / `IMPORT ONLY · VEX: in_triage` / `UNREACHABLE · VEX: not_affected`）并直指真实调用行或依赖清单；
+   - 问题溯源视图新增 **`CI / 容器 / AI 安全`** 独立筛选标签，清晰区分 `OG-CI-*`、`OG-DOCKER-*`、`OG-AI-*` 与常规 SAST；
+   - AutoFix API 与前端面板新增 **`fix_deps`（一键漏洞依赖最小安全升级 Diff 预览/应用）**；导出菜单新增 **`PR / MR 评审评论 Markdown`**；实时检测台新增 Go 与 `.cursorrules` 场景选项。
+
+### 验证结果
+- 新增单元测试 `tests/test_v13_ecosystems_and_web_ux.py` 并通过 `node --check openguard/web/static/app.js` 语法检查，全量单测增至 **80 / 80 通过**；
+- 自身审计：**100.0/100 (A+)**，**Quality Gate: PASSED**（63 文件 / 13279 行，0 告警）。

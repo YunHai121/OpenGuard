@@ -522,7 +522,11 @@ class VulnScanner:
             return []
 
         try:
-            with httpx.Client(timeout=4.0) as client:
+            try:
+                client_cm = httpx.Client(timeout=4.0)
+            except httpx.InvalidURL:
+                client_cm = httpx.Client(timeout=4.0, trust_env=False)
+            with client_cm as client:
                 resp = client.post(self.OSV_BATCH_URL, json={"queries": queries[:60]})
                 if resp.status_code != 200:
                     return []

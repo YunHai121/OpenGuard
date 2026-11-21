@@ -14,11 +14,12 @@ from pydantic import BaseModel
 from openguard import __version__
 from openguard.auditor import OpenGuardAuditor
 from openguard.config import AuditConfig, load_config
+from openguard.remediation.dep_remediator import DependencyRemediator
 from openguard.remediation.doc_generator import DocGenerator
 from openguard.remediation.secret_remediator import SecretRemediator
 from openguard.reporters.badge_generator import render_badge_svg
 from openguard.reporters.html_reporter import render_html_report
-from openguard.reporters.markdown_reporter import render_markdown_report
+from openguard.reporters.markdown_reporter import render_markdown_report, render_pr_comment
 from openguard.reporters.pdf_reporter import render_pdf_bytes
 from openguard.reporters.sarif_sbom_reporter import render_cyclonedx, render_sarif, render_spdx
 from openguard.scanners.secret_rules import build_builtin_secret_rules
@@ -44,6 +45,7 @@ class AutofixRequest(BaseModel):
     target: str
     fix_secrets: bool = True
     fix_docs: bool = True
+    fix_deps: bool = False
     license_id: str = "MIT"
 
 
@@ -165,11 +167,13 @@ def create_app(db_path: Optional[Path] = None) -> FastAPI:
 
         auditor = OpenGuardAuditor(AuditConfig(offline=True))
         secret_res_dict: Dict[str, Any] = {"files_modified": 0, "findings_remediated": 0, "previews": [], "notes": []}
+        dep_res_dict: Dict[str, Any] = {"files_modified": 0, "packages_upgraded": 0, "previews": []}
         doc_actions: Dict[str, str] = {}
+        cached_report = None
 
         if req.fix_secrets:
-            report = auditor.audit(target_path)
-            rem = SecretRemediator().remediate(target_path, report, apply=apply)
+            cached_report = auditor.audit(target_path)
+            rem = SecretRemediator().remediate(target_path, cached_report, apply=apply)
             secret_res_dict = {
                 "applied": rem.applied,
                 "files_modified": rem.files_modified,
@@ -187,10 +191,28 @@ def create_app(db_path: Optional[Path] = None) -> FastAPI:
                 ],
             }
 
+        if req.fix_deps:
+            if cached_report is None:
+                cached_report = auditor.audit(target_path)
+            drem = DependencyRemediator().remediate(target_path, cached_report, apply=apply)
+            dep_res_dict = {
+                "applied": drem.applied,
+                "files_modified": drem.files_modified,
+                "packages_upgraded": drem.packages_upgraded,
+                "previews": [
+                    {
+                        "file_path": p.file_path,
+                        "unified_diff": p.unified_diff,
+                        "upgraded_packages": p.upgraded_packages,
+                    }
+                    for p in drem.previews
+                ],
+            }
+
         if req.fix_docs:
             doc_actions = DocGenerator().generate(target_path, license_id=req.license_id, apply=apply)
 
-        return {"applied": apply, "secrets": secret_res_dict, "docs": doc_actions}
+        return {"applied": apply, "secrets": secret_res_dict, "deps": dep_res_dict, "docs": doc_actions}
 
     def _resolve_safe_target_file(target: str, file_path: str) -> tuple[Path, Path]:
         root = Path(target).resolve()
@@ -294,6 +316,12 @@ def create_app(db_path: Optional[Path] = None) -> FastAPI:
                 content=render_markdown_report(report),
                 media_type="text/markdown; charset=utf-8",
                 headers={"Content-Disposition": f'attachment; filename="{scan_id}.md"'},
+            )
+        if fmt_l in ("pr-comment", "pr_comment"):
+            return Response(
+                content=render_pr_comment(report),
+                media_type="text/markdown; charset=utf-8",
+                headers={"Content-Disposition": f'attachment; filename="{scan_id}_pr_comment.md"'},
             )
         if fmt_l == "sarif":
             return JSONResponse(

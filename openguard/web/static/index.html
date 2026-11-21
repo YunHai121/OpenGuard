@@ -37,9 +37,10 @@
             <a id="exp-html" target="_blank">交互式 HTML 报告</a>
             <a id="exp-pdf" target="_blank">中文 PDF 审计报告</a>
             <a id="exp-sarif" target="_blank">SARIF 2.1.0 (IDE/CI)</a>
-            <a id="exp-cdx" target="_blank">CycloneDX 1.5 SBOM</a>
+            <a id="exp-cdx" target="_blank">CycloneDX 1.5 SBOM (含 VEX)</a>
             <a id="exp-spdx" target="_blank">SPDX 2.3 SBOM</a>
             <a id="exp-md" target="_blank">Markdown 摘要报告</a>
+            <a id="exp-pr" target="_blank">PR / MR 评审评论 Markdown</a>
             <a id="exp-badge" target="_blank">SVG 合规状态徽章</a>
           </div>
         </div>
@@ -159,6 +160,7 @@
             <button class="filter-pill" data-kind="supply_attack">投毒/仿冒</button>
             <button class="filter-pill" data-kind="license">许可证冲突</button>
             <button class="filter-pill" data-kind="sast">SAST 缺陷</button>
+            <button class="filter-pill" data-kind="ci_docker_ai">CI / 容器 / AI 安全</button>
             <button class="filter-pill" data-kind="vuln_unreachable">未引用 CVE</button>
           </div>
           <div class="filter-right">
@@ -213,6 +215,8 @@
             <select id="snippet-filename" class="input-compact mono">
               <option value="service.py">Python (service.py)</option>
               <option value="config.js">JavaScript (config.js)</option>
+              <option value="main.go">Go (main.go)</option>
+              <option value=".cursorrules">AI Rules (.cursorrules)</option>
               <option value="settings.yml">YAML (settings.yml)</option>
               <option value=".env">Env (.env)</option>
             </select>
@@ -253,6 +257,7 @@
         </div>
         <div class="repo-presets-row">
           <label class="toggle-chk"><input type="checkbox" id="fix-secrets" checked /> <span>剥离硬编码密钥为环境变量 (.env.example)</span></label>
+          <label class="toggle-chk"><input type="checkbox" id="fix-deps" checked /> <span>自动升级漏洞依赖至最小安全版本 (requirements / pyproject / package.json)</span></label>
           <label class="toggle-chk"><input type="checkbox" id="fix-docs" checked /> <span>补齐开源文档 (LICENSE / CONTRIBUTING / SECURITY / CHANGELOG / .gitignore)</span></label>
         </div>
       </div>

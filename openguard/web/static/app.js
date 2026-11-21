@@ -137,38 +137,42 @@ function buildUnifiedIssues(report) {
 
   report.vulnerabilities.forEach((v) => {
     const isAttack = v.source === 'typosquatting' || v.source === 'install_script';
-    const isUnreachable = !isAttack && v.reachable === false;
+    const isUnreachable = !isAttack && (v.reachability_level === 'unreachable' || v.reachable === false);
     const kind = isAttack ? 'supply_attack' : isUnreachable ? 'vuln_unreachable' : 'vuln_reachable';
+    const rLevel = v.reachability_level || (v.reachable === true ? 'import_only' : v.reachable === false ? 'unreachable' : 'unknown');
     const pill =
       v.source === 'install_script'
         ? 'INSTALL SCRIPT'
         : v.source === 'typosquatting'
         ? 'TYPOSQUAT'
-        : v.reachable === true
-        ? 'REACHABLE'
-        : v.reachable === false
-        ? 'UNREACHABLE'
+        : rLevel === 'call_reachable'
+        ? 'CALL REACHABLE · VEX: exploitable'
+        : rLevel === 'import_only'
+        ? 'IMPORT ONLY · VEX: in_triage'
+        : rLevel === 'unreachable'
+        ? 'UNREACHABLE · VEX: not_affected'
         : `CVSS ${v.cvss_score}`;
-    const locs = (v.import_locations || []).join(', ');
+    const callLocs = (v.call_locations || []).join(', ');
+    const locs = callLocs || (v.import_locations || []).join(', ');
+    const firstLoc = (v.call_locations && v.call_locations[0]) || (v.import_locations && v.import_locations[0]) || null;
     list.push({
       id: `${v.id}-${v.component_name}`,
       kind,
       sev: String(v.severity),
       title: `${v.id} · ${v.component_name}@${v.component_version}`,
-      subtitle: `${v.ecosystem}${locs ? ' · 调用点: ' + locs : ''}`,
+      subtitle: `${v.ecosystem}${v.source_file ? ' · ' + v.source_file : ''}${locs ? ' · 命中: ' + locs : ''}`,
       pill,
-      file_path: v.import_locations && v.import_locations.length ? v.import_locations[0].split(':')[0] : null,
-      line_number:
-        v.import_locations && v.import_locations.length && v.import_locations[0].includes(':')
-          ? Number(v.import_locations[0].split(':')[1]) || 1
-          : 1,
+      file_path: firstLoc ? firstLoc.split(':')[0] : v.source_file || null,
+      line_number: firstLoc && firstLoc.includes(':') ? Number(firstLoc.split(':')[1]) || 1 : 1,
       cwe: v.id,
       summary:
         v.summary +
-        (v.reachable === true
-          ? ` 【源码可达】已在 ${locs} 实际导入。`
-          : v.reachable === false
-          ? ' 【未直接引用】仅在依赖清单声明，当前源码未检测到导入调用（建议降级优先度或清理冗余依赖）。'
+        (rLevel === 'call_reachable'
+          ? ` 【函数级可达 · VEX: exploitable】已在 ${locs} 直接调用高危符号，需优先升级！`
+          : rLevel === 'import_only'
+          ? ` 【已导入未调用高危符号 · VEX: in_triage】已在 ${locs} 导入，但未检出已知漏洞函数直接调用。`
+          : rLevel === 'unreachable'
+          ? ' 【未直接引用 · VEX: not_affected (code_not_reachable)】仅在依赖清单声明，当前源码未检测到导入调用。'
           : ''),
       snippet: '',
       runbook: [
@@ -205,22 +209,31 @@ function buildUnifiedIssues(report) {
   });
 
   report.code_security_findings.forEach((cs) => {
+    const rid = String(cs.rule_id || '');
+    const isSupplyCfg = rid.startsWith('OG-CI-') || rid.startsWith('OG-DOCKER-') || rid.startsWith('OG-AI-');
+    const pill = rid.startsWith('OG-CI-')
+      ? 'CI/CD 供应链'
+      : rid.startsWith('OG-DOCKER-')
+      ? 'DOCKERFILE'
+      : rid.startsWith('OG-AI-')
+      ? 'AI 安全/UNICODE'
+      : 'SAST';
     list.push({
       id: cs.id,
-      kind: 'sast',
+      kind: isSupplyCfg ? 'ci_docker_ai' : 'sast',
       sev: String(cs.severity),
       title: `${cs.rule_name} (${cs.cwe_id})`,
       subtitle: `${cs.file_path}:${cs.line_number}`,
-      pill: 'SAST',
+      pill,
       file_path: cs.file_path,
       line_number: cs.line_number,
       cwe: cs.cwe_id,
       summary: cs.description,
       snippet: cs.snippet,
       runbook: [
-        `1. 定位 \`${cs.file_path}:${cs.line_number}\` 的高危编码模式（${cs.cwe_id}）。`,
+        `1. 定位 \`${cs.file_path}:${cs.line_number}\` 的高危模式（${cs.rule_id} / ${cs.cwe_id}）。`,
         `2. ${cs.remediation}`,
-        '3. 若确认当前调用输入完全受信任且已做隔离，可在行尾标记 `# openguard: ignore` 或 `// openguard: ignore`。',
+        '3. 若确认当前配置受控，可在行尾标记 `# openguard: ignore` 或 `// openguard: ignore`。',
       ],
       triageable: true,
       raw: cs,
@@ -251,6 +264,7 @@ function renderReport(report) {
   $('exp-cdx').href = `/api/export/${sid}/cyclonedx`;
   $('exp-spdx').href = `/api/export/${sid}/spdx`;
   $('exp-md').href = `/api/export/${sid}/md`;
+  if ($('exp-pr')) $('exp-pr').href = `/api/export/${sid}/pr-comment`;
   $('exp-badge').href = `/api/export/${sid}/badge`;
 
   renderOverview(report);
@@ -735,6 +749,7 @@ async function runAutofix(apply) {
     body: JSON.stringify({
       target,
       fix_secrets: $('fix-secrets').checked,
+      fix_deps: $('fix-deps') ? $('fix-deps').checked : false,
       fix_docs: $('fix-docs').checked,
       license_id: $('fix-license').value,
     }),
@@ -746,24 +761,35 @@ async function runAutofix(apply) {
     mountEscapedHtml(box, `<div style="color:var(--crit-fg);">${esc(data.detail || '操作失败')}</div>`);
     return;
   }
+  const colorDiff = (raw) =>
+    esc(raw)
+      .split('\n')
+      .map((ln) => (ln.startsWith('+') ? `<span class="diff-add">${ln}</span>` : ln.startsWith('-') ? `<span class="diff-del">${ln}</span>` : `<span>${ln}</span>`))
+      .join('\n');
+
   const diffs = (data.secrets.previews || [])
-    .map((p) => {
-      const colored = esc(p.unified_diff)
-        .split('\n')
-        .map((ln) => (ln.startsWith('+') ? `<span class="diff-add">${ln}</span>` : ln.startsWith('-') ? `<span class="diff-del">${ln}</span>` : `<span>${ln}</span>`))
-        .join('\n');
-      return `<div style="margin-bottom:12px;"><strong>${esc(p.file_path)}</strong> <span class="muted-xs">→ 提取环境变量：<code>${esc(p.env_vars_added.join(', '))}</code></span><pre class="diff-pre">${colored}</pre></div>`;
-    })
+    .map(
+      (p) =>
+        `<div style="margin-bottom:12px;"><strong>${esc(p.file_path)}</strong> <span class="muted-xs">→ 提取环境变量：<code>${esc(p.env_vars_added.join(', '))}</code></span><pre class="diff-pre">${colorDiff(p.unified_diff)}</pre></div>`
+    )
+    .join('');
+  const depDiffs = ((data.deps && data.deps.previews) || [])
+    .map(
+      (p) =>
+        `<div style="margin-bottom:12px;"><strong>${esc(p.file_path)}</strong> <span class="muted-xs">→ 安全升级依赖：<code>${esc((p.upgraded_packages || []).join(', '))}</code></span><pre class="diff-pre">${colorDiff(p.unified_diff)}</pre></div>`
+    )
     .join('');
   const docRows = Object.entries(data.docs || {})
     .map(([k, v]) => `<tr><td><code>${esc(k)}</code></td><td>${esc(v)}</td></tr>`)
     .join('');
 
+  const depCount = (data.deps && Number(data.deps.packages_upgraded)) || 0;
   mountEscapedHtml(
     box,
-    `<div class="card-head"><h3 class="card-title">${data.applied ? '已写入修复（原文件已备份至 .openguard_backup/）' : 'Dry-Run 脱敏重构 Diff 预览'}</h3>
-      <span class="mono muted-xs">涉及 ${Number(data.secrets.files_modified)} 文件 · ${Number(data.secrets.findings_remediated)} 处凭据</span></div>
+    `<div class="card-head"><h3 class="card-title">${data.applied ? '已写入修复（原文件已备份至 .openguard_backup/）' : 'Dry-Run 自动修复 Diff 预览'}</h3>
+      <span class="mono muted-xs">密钥 ${Number(data.secrets.findings_remediated)} 处 · 漏洞依赖升级 ${depCount} 项</span></div>
       ${diffs || '<div class="muted">暂无需要脱敏重构的源码文件。</div>'}
+      ${depDiffs ? `<div class="divider"></div><div class="sub-head">漏洞依赖最小安全升级 Diff</div>${depDiffs}` : ''}
       ${docRows ? `<table><thead><tr><th>开源治理文档</th><th>执行状态</th></tr></thead><tbody>${docRows}</tbody></table>` : ''}`
   );
 }
