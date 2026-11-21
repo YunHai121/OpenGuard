@@ -152,6 +152,25 @@ def render_pdf_bytes(report: AuditReport) -> bytes:
             body_style,
         )
     )
+    if s.quality_gate:
+        qg = s.quality_gate
+        story.append(Spacer(1, 5))
+        qg_color = colors.HexColor("#166534") if qg.status == "PASSED" else colors.HexColor("#991b1b")
+        qg_rows = [[p(f"质量门禁判定：{qg.status}"), p("当前值"), p("门禁阈值"), p("状态")]]
+        for c in qg.conditions:
+            qg_rows.append([p(c.label), p(str(c.actual)), p(c.threshold), p("通过" if c.passed else "拦截")])
+        qgt = Table(qg_rows, colWidths=[78 * mm, 26 * mm, 34 * mm, 40 * mm])
+        qgt.setStyle(
+            TableStyle(
+                [
+                    ("BACKGROUND", (0, 0), (-1, 0), qg_color),
+                    ("TEXTCOLOR", (0, 0), (-1, 0), colors.white),
+                    ("GRID", (0, 0), (-1, -1), 0.5, colors.HexColor("#cbd5e1")),
+                    ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
+                ]
+            )
+        )
+        story.append(qgt)
     story.append(Spacer(1, 8))
 
     # Dimension Chart
@@ -245,18 +264,19 @@ def render_pdf_bytes(report: AuditReport) -> bytes:
     # Vulnerabilities & Typosquatting
     story.append(p(f"四、供应链漏洞与仿冒包告警 ({len(report.vulnerabilities)} 项)", h2_style))
     if report.vulnerabilities:
-        v_rows = [[p("编号"), p("组件与版本"), p("级别 / CVSS"), p("安全版本"), p("漏洞摘要")]]
+        v_rows = [[p("编号"), p("组件与版本"), p("优先级 / 可达性"), p("安全版本"), p("漏洞摘要")]]
         for v in report.vulnerabilities[:25]:
+            kev_s = " KEV" if v.in_cisa_kev else ""
             v_rows.append(
                 [
                     p(v.id),
                     p(f"{v.component_name}@{v.component_version}"),
-                    p(f"{v.severity} ({v.cvss_score})"),
+                    p(f"{v.priority_tier} · {v.reachability_level}{kev_s} ({v.severity})"),
                     p(v.fixed_version),
                     p(v.summary),
                 ]
             )
-        vt = Table(v_rows, colWidths=[32 * mm, 36 * mm, 24 * mm, 22 * mm, 64 * mm])
+        vt = Table(v_rows, colWidths=[30 * mm, 34 * mm, 32 * mm, 22 * mm, 60 * mm])
         vt.setStyle(
             TableStyle(
                 [

@@ -90,6 +90,8 @@ class AuditConfig(BaseModel):
     project_license_override: Optional[str] = None
     exclude_patterns: List[str] = Field(default_factory=lambda: list(DEFAULT_EXCLUDE_PATTERNS))
     custom_rules: List[Dict[str, Any]] = Field(default_factory=list)
+    custom_sast_rules: List[Dict[str, Any]] = Field(default_factory=list)
+    policy: Dict[str, Any] = Field(default_factory=dict)
     weights: Dict[str, float] = Field(default_factory=lambda: dict(DEFAULT_WEIGHTS))
 
 

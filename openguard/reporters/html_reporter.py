@@ -82,12 +82,24 @@ def render_html_report(report: AuditReport) -> str:
         )
 
     for v in report.vulnerabilities:
-        reach_pill = (
-            "INSTALL SCRIPT"
-            if v.source == "install_script"
-            else ("TYPOSQUAT" if v.source == "typosquatting" else ("REACHABLE" if v.reachable is True else ("UNREACHABLE" if v.reachable is False else f"CVSS {v.cvss_score}")))
-        )
-        locs = f" · 调用点: {', '.join(v.import_locations)}" if v.import_locations else ""
+        kev_tag = " · CISA KEV" if v.in_cisa_kev else ""
+        epss_tag = f" · EPSS {v.epss_score * 100:.0f}%" if v.epss_score is not None else ""
+        if v.source == "install_script":
+            reach_pill = "[P0] INSTALL SCRIPT"
+        elif v.source == "typosquatting":
+            reach_pill = "[P0] TYPOSQUAT"
+        elif v.source == "policy_engine":
+            reach_pill = "[P0] POLICY BLOCK"
+        elif v.reachability_level == "call_reachable":
+            reach_pill = f"[{v.priority_tier}] CALL REACHABLE{kev_tag}{epss_tag}"
+        elif v.reachability_level == "import_only":
+            reach_pill = f"[{v.priority_tier}] IMPORT ONLY{kev_tag}{epss_tag}"
+        elif v.reachability_level == "unreachable" or v.reachable is False:
+            reach_pill = f"[{v.priority_tier}] UNREACHABLE · VEX: not_affected"
+        else:
+            reach_pill = f"[{v.priority_tier}] CVSS {v.cvss_score}{kev_tag}"
+        hit_locs = v.call_locations or v.import_locations
+        locs = f" · 命中点: {', '.join(hit_locs)}" if hit_locs else ""
         finding_cards.append(
             f'<div class="finding-card" data-kind="vuln">'
             f'<div class="finding-head">{sev_badge(str(v.severity))}'
@@ -100,10 +112,28 @@ def render_html_report(report: AuditReport) -> str:
         )
 
     for cs in report.code_security_findings:
+        rid = str(cs.rule_id or "")
+        cat_label = (
+            "CI/CD 供应链"
+            if rid.startswith("OG-CI-")
+            else (
+                "DOCKERFILE"
+                if rid.startswith("OG-DOCKER-")
+                else (
+                    "IAC 云原生"
+                    if rid.startswith("OG-IAC-")
+                    else (
+                        "AI 安全"
+                        if rid.startswith("OG-AI-")
+                        else ("污点追踪" if rid.startswith("OG-TAINT-") else ("自定义策略" if not rid.startswith("OG-SAST-") else "SAST"))
+                    )
+                )
+            )
+        )
         finding_cards.append(
             f'<div class="finding-card" data-kind="sast">'
             f'<div class="finding-head">{sev_badge(str(cs.severity))}'
-            f'<span class="kind-pill">SAST · {esc(cs.cwe_id)}</span>'
+            f'<span class="kind-pill">{esc(cat_label)} · {esc(cs.cwe_id)}</span>'
             f'<strong>{esc(cs.rule_name)}</strong>'
             f'<code class="loc">{esc(cs.file_path)}:{cs.line_number}</code></div>'
             f'<div style="font-size:13px;">{esc(cs.description)}</div>'

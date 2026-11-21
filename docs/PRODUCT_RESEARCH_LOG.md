@@ -34,9 +34,13 @@
 - **下一阶段新候选方向**：
   - ~~**EPSS / CISA KEV 真实利用优先级（对标 Dependency-Track / Wiz / Grype）**~~（已在 Round #5 落地 KEV/EPSS 情报库与 P0–P3 风险分级矩阵）
   - ~~**IaC 云原生配置审计（对标 Checkov / Trivy Misconfig / Terrascan）**~~（已在 Round #5 落地 `IaCScanner`：`docker-compose` / Kubernetes / Terraform）
-  - **Custom YAML Rule Engine（对标 Semgrep / Gitleaks 自定义规则包）**：支持团队通过 `.openguard/rules/*.yml` 零代码编写自定义 SAST/合规策略规则；
-  - **Dependency License & Supply-Chain Policy Engine（对标 OPA / FOSSA / Socket Policy）**：支持在 `.openguard.yml` 中声明自定义许可证白名单/黑名单与阻断包策略（如禁用某许可证或强制要求特定依赖最低版本）；
-  - **HTML / PDF 报告同步升级**：在交互式 HTML 与中文 PDF 报告中同步呈现 Quality Gate 门禁卡片、P0–P3 KEV/EPSS 优先级与 Call-Graph 可达性指标。
+  - ~~**Custom YAML Rule Engine（对标 Semgrep / Gitleaks 自定义规则包）**~~（已在 Round #6 落地 `PolicyEngine`）
+  - ~~**Dependency License & Supply-Chain Policy Engine（对标 OPA / FOSSA / Socket Policy）**~~（已在 Round #6 落地 `policy.denied_licenses` / `allowed_licenses` / `denied_packages`）
+  - ~~**HTML / PDF 报告同步升级**~~（已在 Round #6 落地 Quality Gate 门禁表与 P0–P3 KEV/EPSS/可达性徽章）
+- **下一阶段新候选方向（v1.3.0 规划）**：
+  - **OpenSSF Scorecard / Supply-Chain 仓库健康度体检扩展（对标 OpenSSF Scorecard / deps.dev）**：检测 `CODEOWNERS`、Dependabot/Renovate 自动升级配置、安全发布签名（GPG/Sigstore）与锁文件完整性哈希检查（`package-lock.json` `integrity` / `requirements.txt` `--hash`）；
+  - **多进程/线程池并发扫描加速（对标 Gitleaks / TruffleHog / Semgrep 性能工程）**：对大型单仓（10,000+ 文件）引入自适应并发文件扫描与增量缓存，显著缩短大仓全量审计耗时；
+  - **版本发布整理 (`v1.3.0`)**：整合 Round #2–#6 全部能力（AI 规则安全 + CRC32 校验 + 10 生态 SBOM + 污点追踪 + SLSA Provenance + KEV/EPSS + IaC + 声明式策略引擎），更新 `README.md`、`docs/ARCHITECTURE.md` 并发布 `v1.3.0` 正式版本标签。
 
 ---
 
@@ -124,4 +128,24 @@
 
 ### 验证结果
 - 新增 `tests/test_v15_kev_epss_and_iac.py` 并通过 `node --check openguard/web/static/app.js`，全量单测增至 **85 / 85 通过**；
+- 自身审计：**100.0/100 (A+)**，**Quality Gate: PASSED**。
+
+---
+
+## Round #6 — 2026-11-22 01:28–01:34
+
+### 本轮重点对标产品
+- **Semgrep YAML Rules / FOSSA / Open Policy Agent (OPA)**：声明式策略即代码（Policy-as-Code），让研发与法务团队无需修改扫描器源码即可通过 YAML 自定义企业内部代码规范、许可证黑白名单与禁用组件清单。
+- **Snyk / FOSSA / SonarQube 合规报告交付标准**：面向管理层与评审专家的离线单文件 HTML/PDF 报告必须首屏给出确定性 Quality Gate 门禁判定、P0–P3 优先级（含 KEV/EPSS/可达性）与清晰的问题分类。
+
+### 核心发现与已落地改进
+1. **声明式 Policy-as-Code 与自定义 YAML 规则引擎（`openguard/scanners/policy_engine.py`，接入 `AuditConfig` 与 `OpenGuardAuditor`）**：
+   - 自动加载仓库 `.openguard/rules/*.{yml,yaml}` 与 `.openguard.yml` 中的 `custom_sast_rules`，支持 `pattern`、`paths`、`exclude_paths`、`severity`、`cwe` 与行内 `openguard: ignore` 豁免；
+   - 支持 `.openguard.yml` 中声明式 `policy:` 块：`denied_licenses`（许可证黑名单）、`allowed_licenses`（严格许可证白名单）与 `denied_packages`（禁用包 P0 强阻断）。
+2. **离线 HTML 与中文 PDF 审计报告同步升级（`html_reporter.py` + `pdf_reporter.py`）**：
+   - HTML 报告升级漏洞卡片呈现 `[P0-P3]` 优先级 + Call-Graph 可达性 + CISA KEV + EPSS %，并为 CI/CD、Dockerfile、IaC、AI 安全、污点追踪与自定义策略呈现独立分类徽章；
+   - PDF 报告首屏新增 **Quality Gate 门禁判定汇总表**（5 项硬性门禁逐项展示），漏洞清单列升级为 `优先级 / 可达性 (P0-P3 / KEV)`。
+
+### 验证结果
+- 新增 `tests/test_v16_policy_and_reports.py`，全量单测增至 **86 / 86 通过**；
 - 自身审计：**100.0/100 (A+)**，**Quality Gate: PASSED**。

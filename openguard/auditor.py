@@ -34,6 +34,7 @@ from openguard.scanners.governance_checker import GovernanceChecker
 from openguard.scanners.iac_scanner import IaCScanner
 from openguard.scanners.install_script_scanner import InstallScriptScanner
 from openguard.scanners.license_analyzer import LicenseAnalyzer
+from openguard.scanners.policy_engine import PolicyEngine
 from openguard.scanners.reachability_analyzer import ReachabilityAnalyzer
 from openguard.scanners.secret_scanner import SecretScanner
 from openguard.scanners.vuln_scanner import VulnScanner
@@ -153,13 +154,25 @@ class OpenGuardAuditor:
             exclude_patterns=cfg.exclude_patterns,
         )
 
-        # 6. Static Application Security Testing (SAST + CI/CD Workflow + Dockerfile + IaC + AI Config/Unicode)
+        # 6. Static Application Security Testing (SAST + CI/CD + Dockerfile + IaC + AI Config + Custom YAML Policy)
         code_scanner = CodeSecurityScanner(cfg)
         code_findings = code_scanner.scan_directory(resolved)
         code_findings.extend(CIWorkflowScanner().scan_repository(resolved, exclude_patterns=cfg.exclude_patterns))
         code_findings.extend(DockerfileScanner().scan_repository(resolved, exclude_patterns=cfg.exclude_patterns))
         code_findings.extend(IaCScanner().scan_repository(resolved, exclude_patterns=cfg.exclude_patterns))
         code_findings.extend(AIConfigSecurityScanner().scan_repository(resolved, exclude_patterns=cfg.exclude_patterns))
+
+        policy_engine = PolicyEngine()
+        code_findings.extend(policy_engine.scan_custom_code_rules(resolved, cfg))
+        pol_lics, pol_pkgs = policy_engine.evaluate_supply_chain_policy(
+            project_name=repo_root.name,
+            project_license=project_license,
+            components=components,
+            config=cfg,
+            existing_license_conflicts=license_conflicts,
+        )
+        license_conflicts.extend(pol_lics)
+        vulnerabilities.extend(pol_pkgs)
 
         # Apply Diff-Aware filtering to SAST / CI / Docker & manifest findings when --diff is active
         if diff_added_map is not None:

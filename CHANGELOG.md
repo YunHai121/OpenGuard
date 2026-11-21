@@ -5,6 +5,8 @@ All notable changes to **OpenGuard (开源卫士)** are documented in this file 
 ## [Unreleased]
 
 ### Added
+- **声明式 Policy-as-Code 与自定义 YAML 规则引擎 (`PolicyEngine`，对标 Semgrep / FOSSA / OPA)**：支持自动加载 `.openguard/rules/*.yml` 与 `.openguard.yml` 中的 `custom_sast_rules`，并支持声明式 `policy.denied_licenses`、`policy.allowed_licenses` 与 `policy.denied_packages` 合规门禁。
+- **HTML / PDF 离线报告同步升级**：HTML 报告新增 `[P0-P3]` KEV/EPSS/Call-Graph 徽章及 CI/Dockerfile/IaC/AI/污点/策略独立标签；中文 PDF 报告首屏新增 Quality Gate 门禁执行摘要表与优先级/可达性列。
 - **CISA KEV & EPSS 风险优先级分级（对标 Dependency-Track / Wiz / Grype）**：新增 `in_cisa_kev`、`epss_score` 与 `P0`–`P3` 风险分级矩阵（融合 CISA KEV、EPSS 概率与 Call-Graph 可达性），并透出至 CycloneDX 1.5、PR 评审评论与 Web 工作台。
 - **云原生 IaC 安全审计器 (`IaCScanner`，对标 Checkov / Trivy Config)**：新增 9 项静态规则（`OG-IAC-001`–`OG-IAC-009`），覆盖 `docker-compose.yml`、Kubernetes YAML 与 Terraform `*.tf` 常见高危误配置。
 - **Python 跨语句 AST 污点传播分析引擎 (`PythonTaintAnalyzer`)**：对标 Semgrep Taint Mode，在函数与模块作用域内追踪外部用户输入（`request.args/form/json/values`、`sys.argv`、`input`）经变量赋值/拼接流入 SQL 注入（`OG-TAINT-PY-001`）、命令注入（`OG-TAINT-PY-002`）、SSRF（`OG-TAINT-PY-003`）与路径穿越（`OG-TAINT-PY-004`），并内置 `int`/`shlex.quote`/`os.path.basename`/`is_relative_to` 等净化器降噪。
