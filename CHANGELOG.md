@@ -2,6 +2,12 @@
 
 All notable changes to **OpenGuard (开源卫士)** are documented in this file following [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and Semantic Versioning.
 
+## [Unreleased]
+
+### Added
+- **JavaScript / TypeScript 跨语句污点分析引擎 (`JSTaintAnalyzer`)**：对标 Semgrep JS / CodeQL，追踪 Express/Next.js/Node.js 外部输入与对象解构变量流入 `child_process.exec`（`OG-TAINT-JS-001`）、XSS（`OG-TAINT-JS-002`）、SSRF（`OG-TAINT-JS-003`）、`fs` 路径穿越（`OG-TAINT-JS-004`）与原型链污染（`OG-TAINT-JS-005`），自动识别常见净化器与守卫。
+- **基于 SHA-256 内容哈希的增量文件扫描缓存 (`IncrementalScanCache` + `--cache`)**：对标 Ruff `.ruff_cache` / ESLint `--cache`，采用 `文件内容 + 配置指纹 + 工具版本` 复合键跳过未变更文件并保证零脏缓存。
+
 ## [1.3.0] - 2026-11-22
 
 ### Added

@@ -165,6 +165,7 @@ def scan(
     staged: bool = typer.Option(False, "--staged", help="仅扫描 git staged 暂存区变更（适用于 pre-commit）"),
     diff: Optional[str] = typer.Option(None, "--diff", help="Diff-Aware 增量扫描基准分支/提交（如 origin/main 或 HEAD~1）"),
     baseline: Optional[Path] = typer.Option(None, "--baseline", help="基线文件路径（自动忽略基线中已有存量问题，仅拦截新增风险）"),
+    cache: bool = typer.Option(False, "--cache", help="启用基于 SHA-256 内容哈希的增量文件扫描缓存 (.openguard_cache)"),
     offline: bool = typer.Option(False, "--offline", help="离线模式（跳过 OSV API 请求，纯本地库检测）"),
     license_override: Optional[str] = typer.Option(None, "--license", help="手动覆盖项目主 SPDX 许可证（如 MIT / Apache-2.0）"),
     fmt: Optional[str] = typer.Option(None, "--format", help="导出格式: html|pdf|json|sarif|md|pr-comment|cyclonedx|spdx|slsa|badge|all"),
@@ -187,6 +188,8 @@ def scan(
         cfg.diff_ref = diff
     if baseline:
         cfg.baseline_path = str(baseline)
+    if cache:
+        cfg.use_cache = True
     cfg.offline = offline or cfg.offline
     if license_override:
         cfg.project_license_override = license_override

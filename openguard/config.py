@@ -27,6 +27,7 @@ DEFAULT_EXCLUDE_DIRS = {
     ".idea",
     ".vscode",
     ".openguard_backup",
+    ".openguard_cache",
     "demo_outputs",
 }
 
@@ -85,6 +86,7 @@ class AuditConfig(BaseModel):
     entropy_threshold: float = 3.3
     max_file_size_kb: int = 1024
     max_workers: int = 4
+    use_cache: bool = False
     staged_only: bool = False
     diff_ref: Optional[str] = None
     baseline_path: Optional[str] = None

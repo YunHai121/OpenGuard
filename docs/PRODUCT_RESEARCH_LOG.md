@@ -43,9 +43,10 @@
   - ~~**版本发布整理 (`v1.3.0`)**~~（已在 Round #7 打标发布 `v1.3.0`）
 - **v1.4.0 下一阶段候选调研方向**：
   - **GitHub / GitLab / Gitee 真实开源仓库压测与误报微调**：在真实开源项目上批量实测 OpenGuard v1.3.0，收集边缘语法/误报案例反哺规则精度；
-  - **JavaScript / TypeScript 跨语句污点分析（对标 Semgrep JS / CodeQL）**：将 Python 污点引擎的 `Sources -> Sanitizers -> Sinks` 能力延伸至 Express/Next.js 的 XSS / SSRF / Prototype Pollution / Command Injection；
-  - **OpenTelemetry / JSONL 流式结构化日志与增量文件哈希缓存（对标 Bazel/Nx + Semgrep 缓存架构）**：对未变动文件按 SHA-256 缓存扫描结果，让超大单仓二次扫描进入亚秒级；
-  - **Rust / Java / C++ SAST 扩展（`unsafe` 审计、`Runtime.getRuntime().exec`、`strcpy`/`sprintf`）**。
+  - ~~**JavaScript / TypeScript 跨语句污点分析（对标 Semgrep JS / CodeQL）**~~（已在 Round #8 落地 `JSTaintAnalyzer`：`OG-TAINT-JS-001`–`005`）
+  - ~~**增量文件哈希缓存（对标 Ruff `.ruff_cache` / ESLint `--cache` / Semgrep）**~~（已在 Round #8 落地 `IncrementalScanCache` + `--cache`）
+  - **Rust / Java / C++ SAST 扩展（`unsafe` 审计、`Runtime.getRuntime().exec`、`strcpy`/`sprintf`）**；
+  - **OpenTelemetry / JSONL 流式结构化日志与批量多仓组合审计（Portfolio / Org-Level Audit）**。
 
 ---
 
@@ -176,3 +177,27 @@
 ### 验证结果
 - 新增 `tests/test_v17_lockfile_integrity_and_perf.py`（含 24 文件多线程 vs 单线程确定性一致校验），全量单测增至 **89 / 89 通过**；
 - 自身审计：**100.0/100 (A+)**，**Quality Gate: PASSED**，已打标 `v1.3.0` 并双仓同步。
+
+---
+
+## Round #8 — 2026-11-22 03:28–03:34
+
+### 本轮重点对标产品
+- **Semgrep JS / GitHub CodeQL（Express / Next.js / Node.js 跨语句污点追踪）**：针对前端/Node 全栈项目，追踪 `req.query` / `req.body` / `req.params` / 解构赋值流入 `child_process.exec`、`res.send`、`fetch`/`axios`、`fs.readFile` 与动态属性写入（原型链污染），并识别 `DOMPurify.sanitize`、`path.basename`、`__proto__` 守卫以压低误报。
+- **Ruff `.ruff_cache` / ESLint `--cache`（内容哈希增量扫描缓存）**：突破易受 `git checkout` 影响的 `mtime` 缓存，以 `SHA-256(文件内容 + 配置指纹 + 工具版本)` 作为复合缓存键，实现零脏缓存的亚秒级增量二次扫描。
+
+### 核心发现与已落地改进
+1. **JavaScript / TypeScript 跨语句污点分析引擎（`openguard/scanners/js_taint_analyzer.py`，接入 `CodeSecurityScanner`）**：
+   - 支持追踪 Express/Next.js 外部输入与解构变量，检出 5 类高危数据流漏洞：
+     - `OG-TAINT-JS-001` (CRITICAL, CWE-78)：Node.js `child_process.exec/execSync` 命令注入；
+     - `OG-TAINT-JS-002` (HIGH, CWE-79)：反射/DOM XSS；
+     - `OG-TAINT-JS-003` (HIGH, CWE-918)：出站 `fetch`/`axios` SSRF；
+     - `OG-TAINT-JS-004` (HIGH, CWE-22)：`fs` 目录穿越；
+     - `OG-TAINT-JS-005` (HIGH, CWE-1321)：动态属性键原型链污染；
+   - 自动识别 `DOMPurify.sanitize`、`escapeHtml`、`path.basename`、`startsWith` 与 `__proto__` 校验守卫。
+2. **内容哈希增量文件扫描缓存（`openguard/utils/scan_cache.py` + `cli.py` `--cache`）**：
+   - 在 `<repo>/.openguard_cache/scan_cache.json` 持久化每文件密钥与 SAST 扫描结果；内容变更、配置指纹变更或版本升级均自动失效重扫；同步将 `.openguard_cache/` 加入默认排除目录与 `.gitignore`。
+
+### 验证结果
+- 新增 `tests/test_v18_js_taint_and_cache.py`（3 项专项测试），全量单测增至 **92 / 92 通过**；
+- 自身审计：**100.0/100 (A+)**，**Quality Gate: PASSED**。

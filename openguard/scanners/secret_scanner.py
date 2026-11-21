@@ -148,12 +148,56 @@ class SecretScanner:
                     continue
                 candidate_files.append(fpath)
 
+        cache = None
+        if getattr(self.config, "use_cache", False):
+            from openguard.utils.scan_cache import IncrementalScanCache
+
+            cache = IncrementalScanCache(root, self.config)
+
+        def _scan_one(fpath: Path) -> SecretScanOutcome:
+            if cache is None:
+                return self.scan_file(fpath, root)
+            from openguard.utils.scan_cache import compute_file_cache_key
+
+            try:
+                raw_bytes = fpath.read_bytes()
+            except OSError:
+                return SecretScanOutcome(findings=[])
+            if b"\x00" in raw_bytes[:4096]:
+                return SecretScanOutcome(findings=[])
+            rel_p = fpath.resolve().relative_to(root.resolve()).as_posix()
+            ckey = compute_file_cache_key(raw_bytes, cache.config_fp, f"sec:{rel_p}")
+            cached = cache.get(ckey)
+            if cached is not None:
+                return SecretScanOutcome(
+                    findings=[SecretFinding(**item) for item in cached.get("findings", [])],
+                    suppressed_count=int(cached.get("suppressed_count", 0)),
+                    suppressed_samples=list(cached.get("suppressed_samples", [])),
+                    files_scanned=int(cached.get("files_scanned", 1)),
+                    lines_scanned=int(cached.get("lines_scanned", 0)),
+                )
+            out = self.scan_content(raw_bytes.decode("utf-8", errors="replace"), rel_p)
+            cache.put(
+                ckey,
+                {
+                    "findings": [f.model_dump() for f in out.findings],
+                    "suppressed_count": out.suppressed_count,
+                    "suppressed_samples": out.suppressed_samples[:25],
+                    "files_scanned": out.files_scanned,
+                    "lines_scanned": out.lines_scanned,
+                },
+            )
+            return out
+
         workers = max(1, min(int(getattr(self.config, "max_workers", 4) or 1), 8))
         if workers > 1 and len(candidate_files) >= 16:
             with ThreadPoolExecutor(max_workers=workers) as pool:
-                outcomes = list(pool.map(lambda p: self.scan_file(p, root), candidate_files))
+                outcomes = list(pool.map(_scan_one, candidate_files))
         else:
-            outcomes = [self.scan_file(p, root) for p in candidate_files]
+            outcomes = [_scan_one(p) for p in candidate_files]
+
+        if cache is not None:
+            cache.flush()
 
         for outcome in outcomes:
             files_scanned += outcome.files_scanned

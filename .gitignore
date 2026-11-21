@@ -19,6 +19,7 @@ env/
 *.key
 *.p12
 .openguard_backup/
+.openguard_cache/
 demo_outputs/
 
 # Packaging / build

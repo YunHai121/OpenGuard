@@ -69,15 +69,41 @@ class CodeSecurityScanner:
                 if fpath.suffix.lower() in (".py", ".js", ".ts", ".jsx", ".tsx", ".sh", ".go"):
                     target_files.append(fpath)
 
+        cache = None
+        if getattr(self.config, "use_cache", False):
+            from openguard.utils.scan_cache import IncrementalScanCache
+
+            cache = IncrementalScanCache(root, self.config)
+
+        def _scan_one(fpath: Path) -> List[CodeSecurityFinding]:
+            if cache is None:
+                return self.scan_file(fpath, root)
+            from openguard.utils.scan_cache import compute_file_cache_key
+
+            try:
+                raw_bytes = fpath.read_bytes()
+            except OSError:
+                return []
+            rel = fpath.resolve().relative_to(root.resolve()).as_posix()
+            ckey = compute_file_cache_key(raw_bytes, cache.config_fp, f"sast:{rel}")
+            cached = cache.get(ckey)
+            if cached is not None:
+                return [CodeSecurityFinding(**item) for item in cached]
+            res = self.scan_content(raw_bytes.decode("utf-8", errors="replace"), rel)
+            cache.put(ckey, [item.model_dump() for item in res])
+            return res
+
         workers = max(1, min(int(getattr(self.config, "max_workers", 4) or 1), 8))
         findings: List[CodeSecurityFinding] = []
         if workers > 1 and len(target_files) >= 16:
             with ThreadPoolExecutor(max_workers=workers) as pool:
-                for batch in pool.map(lambda p: self.scan_file(p, root), target_files):
+                for batch in pool.map(_scan_one, target_files):
                     findings.extend(batch)
         else:
             for fpath in target_files:
-                findings.extend(self.scan_file(fpath, root))
+                findings.extend(_scan_one(fpath))
+        if cache is not None:
+            cache.flush()
         return findings
 
     def scan_file(self, file_path: Path, root_path: Path | None = None) -> List[CodeSecurityFinding]:
@@ -334,6 +360,16 @@ class CodeSecurityScanner:
                             remediation=rem,
                         )
                     )
+
+        # Cross-statement JavaScript / TypeScript Taint Tracking (XSS, SSRF, RCE, Path Traversal, Prototype Pollution)
+        from openguard.scanners.js_taint_analyzer import JSTaintAnalyzer
+
+        existing_keys = {(f.line_number, f.cwe_id) for f in findings}
+        for tf in JSTaintAnalyzer().analyze(content, file_path):
+            if (tf.line_number, tf.cwe_id) not in existing_keys:
+                existing_keys.add((tf.line_number, tf.cwe_id))
+                findings.append(tf)
+
         return findings
 
     def _scan_shell_patterns(self, content: str, file_path: str) -> List[CodeSecurityFinding]:
