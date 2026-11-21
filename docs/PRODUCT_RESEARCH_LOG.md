@@ -47,8 +47,10 @@
   - ~~**增量文件哈希缓存（对标 Ruff `.ruff_cache` / ESLint `--cache` / Semgrep）**~~（已在 Round #8 落地 `IncrementalScanCache` + `--cache`）
   - ~~**Rust / Java / C++ SAST 扩展（对标 CodeQL / SpotBugs / Cppcheck / Clippy）**~~（已在 Round #9 落地 7 语言 SAST 覆盖）
   - ~~**组织级批量多仓组合审计与 JSONL 流式输出（对标 Snyk Org / Dependency-Track Portfolio）**~~（已在 Round #9 落地 `PortfolioAuditor` 与 `openguard batch`）
-  - **SBOM Diff / 依赖变更漂移对比（对标 Syft / CycloneDX CLI / Dependency Review Action）**：对比两个版本/分支之间的新增/升级/移除组件与许可证变化，专用于 PR 供应链审查；
-  - **跨生态 OSV 离线漏洞库扩容与 CVSS v4.0 支持**：覆盖 2025–2026 高频 PyPI / npm / Go / Maven / Rust 新 CVE。
+  - ~~**SBOM Diff / 依赖变更漂移对比（对标 Syft / CycloneDX CLI / Dependency Review Action）**~~（已在 Round #10 落地 `sbom_tools.py`、`openguard sbom-diff` 与 NTIA `openguard sbom-score`）
+  - ~~**跨生态 OSV 离线漏洞库扩容（2025–2026 高频新 CVE）**~~（已在 Round #10 补充 React RSC、Next.js、Brotli HTTP2Shell、Axios 2025–2026 高危 CVE 与 KEV/EPSS 数据）
+  - **GitHub / GitLab 真实热门开源项目批量实测与误报压测（对标工业界精度基准）**：利用 `openguard batch` 与 `sbom-score` 实测典型开源项目结构，并强化 `docs/ARCHITECTURE.md` 与 `docs/INSTALLATION_AND_USAGE.md` 同步覆盖 `v1.3+` 全新能力；
+  - **OpenGuard Doctor 自检诊断命令 (`openguard doctor`) & Shell 自动补全 / 交互式配置向导 (`openguard init`)**（对标 `brew doctor` / `ruff` / `snyk` 开发者体验 DX 最佳实践）。
 
 ---
 
@@ -223,3 +225,22 @@
 ### 验证结果
 - 新增 `tests/test_v19_systems_sast_and_portfolio.py`（3 项专项测试），全量单测增至 **95 / 95 通过**；
 - 自身审计：**100.0/100 (A+)**，**Quality Gate: PASSED**。
+
+---
+
+## Round #10 — 2026-11-22 05:28–05:34
+
+### 本轮重点对标产品与行业动态
+- **GitHub `dependency-review-action` / CycloneDX CLI `diff` / Interlynk `sbomqs`（NTIA Minimum Elements）**：在 PR/发布阶段不仅要生成 SBOM，还要能对比两份 SBOM 拦截“**许可证漂移（License Drift，如悄然引入 GPL/AGPL）**”与“**新增漏洞**”，并依据 NTIA/CISA 7 项最小要素对 SBOM 本身的完整度给出 0–10.0 质量评分。
+- **2025–2026 头部开源生态高危 CVE 演进**：React Server Components (`CVE-2025-55182`, CVSS 10.0 KEV)、Next.js Server Functions (`CVE-2025-66478`, CVSS 10.0 KEV)、Brotli "HTTP2Shell" (`CVE-2026-111497`, CVSS 9.2) 以及 Axios 2026 递归 DoS / 原型链污染（`CVE-2026-67313` / `CVE-2026-67319`）。
+
+### 核心发现与已落地改进
+1. **SBOM Diff 供应链漂移对比 & NTIA 质量评分器（`openguard/sbom_tools.py` + `openguard sbom-diff` / `openguard sbom-score`）**：
+   - `diff_cyclonedx_sboms` 精确对比两份 CycloneDX SBOM 的新增/移除/升级组件、许可证漂移（自动标记 Copyleft 风险引入）与新增/已修复漏洞，输出 PR 友好型 Markdown 并支持 `--fail-on-drift` 门禁；
+   - `score_sbom_quality` 依据 7 项 NTIA/CISA 最小要素（规范版本、作者与时间戳、名称与版本锁定率、PURL 覆盖率、依赖关系图、SPDX 许可证覆盖率、VEX 丰富度）输出 0.0–10.0 质量分与等级，支持 `--min-score` 门槛控制。
+2. **2025–2026 离线高危 CVE & CISA KEV 知识库扩容（`openguard/scanners/vuln_scanner.py`）**：
+   - 新增 `CVE-2025-55182`（React）、`CVE-2025-66478`（Next.js）、`CVE-2026-111497`（Brotli）及 `CVE-2026-67313`/`CVE-2026-67319`（Axios）并同步补充 CISA KEV 与 EPSS 概率数据。
+
+### 验证结果
+- 新增 `tests/test_v20_sbom_diff_ntia_and_cves.py`（3 项专项测试），全量单测增至 **98 / 98 通过**；
+- 自身审计：**100.0/100 (A+)**，**Quality Gate: PASSED**；OpenGuard 自生成 CycloneDX SBOM 通过 NTIA 质量评分验证（≥ 8.0 / 10.0）。

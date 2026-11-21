@@ -24,10 +24,17 @@ CISA_KEV_SET = frozenset(
         "CVE-2022-26134",  # Confluence OGNL RCE
         "CVE-2023-4863",   # libwebp heap buffer overflow
         "CVE-2024-3094",   # xz-utils supply-chain backdoor
+        "CVE-2025-55182",  # React Server Components RCE (CVSS 10.0)
+        "CVE-2025-66478",  # Next.js Server Functions RCE (CVSS 10.0)
     }
 )
 
 OFFLINE_EPSS_SCORES: Dict[str, float] = {
+    "CVE-2025-55182": 0.968,
+    "CVE-2025-66478": 0.964,
+    "CVE-2026-111497": 0.891,
+    "CVE-2026-67319": 0.542,
+    "CVE-2026-67313": 0.485,
     "CVE-2021-44228": 0.975,
     "CVE-2022-22965": 0.972,
     "CVE-2023-44487": 0.946,
@@ -248,7 +255,57 @@ OFFLINE_CVE_DB: List[Dict[str, Any]] = [
         "cvss": 7.5,
         "summary": "lxml iterwalk NULL 指针解引用触发崩溃。",
     },
+    {
+        "ecosystem": "PyPI",
+        "package": "brotli",
+        "id": "CVE-2026-111497",
+        "affected_lt": "1.2.0",
+        "fixed": "1.2.0",
+        "severity": Severity.CRITICAL,
+        "cvss": 9.2,
+        "summary": "Brotli 解码器缓冲区溢出漏洞（HTTP2Shell），处理恶意压缩网络流可触发未认证远程代码执行。",
+    },
     # npm
+    {
+        "ecosystem": "npm",
+        "package": "react",
+        "id": "CVE-2025-55182",
+        "affected_lt": "19.2.1",
+        "fixed": "19.2.1",
+        "severity": Severity.CRITICAL,
+        "cvss": 10.0,
+        "summary": "React Server Components (RSC) 服务端函数反序列化漏洞，可导致未认证远程代码执行 (RCE)。",
+    },
+    {
+        "ecosystem": "npm",
+        "package": "next",
+        "id": "CVE-2025-66478",
+        "affected_lt": "15.5.7",
+        "fixed": "15.5.7",
+        "severity": Severity.CRITICAL,
+        "cvss": 10.0,
+        "summary": "Next.js Server Functions 载荷反序列化存在未认证远程代码执行 (RCE) 严重漏洞。",
+    },
+    {
+        "ecosystem": "npm",
+        "package": "axios",
+        "id": "CVE-2026-67313",
+        "affected_lt": "1.18.0",
+        "fixed": "1.18.0",
+        "severity": Severity.HIGH,
+        "cvss": 7.5,
+        "summary": "axios `formDataToJSON` 解析深层嵌套括号字段时存在无限递归堆栈耗尽拒绝服务 (DoS)。",
+    },
+    {
+        "ecosystem": "npm",
+        "package": "axios",
+        "id": "CVE-2026-67319",
+        "affected_lt": "1.18.0",
+        "fixed": "1.18.0",
+        "severity": Severity.HIGH,
+        "cvss": 7.8,
+        "summary": "axios 请求配置继承与请求头构造存在原型链污染利用链 (Prototype Pollution Gadget)。",
+    },
     {
         "ecosystem": "npm",
         "package": "lodash",

@@ -485,6 +485,57 @@ def batch(
         raise typer.Exit(code=1)
 
 
+@app.command(name="sbom-diff")
+def sbom_diff(
+    before: Path = typer.Argument(..., help="变更前的 CycloneDX SBOM JSON 文件路径"),
+    after: Path = typer.Argument(..., help="变更后的 CycloneDX SBOM JSON 文件路径"),
+    md_out: Optional[Path] = typer.Option(None, "--md-out", "-o", help="导出 PR 友好型 SBOM Diff Markdown 路径"),
+    fail_on_drift: bool = typer.Option(False, "--fail-on-drift", help="若引入新漏洞或强传染许可证漂移则返回非零退出码"),
+) -> None:
+    """对比两份 CycloneDX SBOM，检测新增/升级/移除组件、许可证漂移与新增漏洞。"""
+    from openguard.sbom_tools import diff_cyclonedx_sboms, load_cyclonedx_json, render_sbom_diff_markdown
+
+    diff = diff_cyclonedx_sboms(load_cyclonedx_json(before), load_cyclonedx_json(after))
+    md = render_sbom_diff_markdown(diff)
+    console.print(md)
+    if md_out:
+        md_out.parent.mkdir(parents=True, exist_ok=True)
+        md_out.write_text(md, encoding="utf-8")
+        console.print(f"[green]已保存 SBOM Diff 报告:[/green] {md_out}")
+    if fail_on_drift and diff.has_risky_drift:
+        console.print("[bold red]检测到高风险供应链漂移（新漏洞或 Copyleft 许可证引入），门禁拦截！[/bold red]")
+        raise typer.Exit(code=1)
+
+
+@app.command(name="sbom-score")
+def sbom_score(
+    target: Path = typer.Argument(".", help="CycloneDX JSON 文件路径或待现场生成 SBOM 评分的仓库目录"),
+    min_score: float = typer.Option(0.0, "--min-score", help="最低质量门槛分 (0-10.0)，低于则退出码非零"),
+) -> None:
+    """依据 NTIA/CISA Minimum Elements 对 CycloneDX SBOM 执行 0-10.0 完整度质量评分（对标 sbomqs）。"""
+    from openguard.reporters.sarif_sbom_reporter import render_cyclonedx
+    from openguard.sbom_tools import load_cyclonedx_json, score_sbom_quality
+
+    if target.is_file():
+        sbom_data = load_cyclonedx_json(target)
+    else:
+        rep = OpenGuardAuditor(AuditConfig(offline=True)).audit(target)
+        sbom_data = render_cyclonedx(rep)
+
+    qr = score_sbom_quality(sbom_data)
+    tbl = Table(title=f"NTIA SBOM 质量评分: {qr.overall_score:.2f} / 10.0 (等级 {qr.grade} · {qr.component_count} 组件)")
+    tbl.add_column("编号")
+    tbl.add_column("NTIA 最小要素检查项")
+    tbl.add_column("得分", justify="right")
+    tbl.add_column("状态")
+    for c in qr.checks:
+        tbl.add_row(c["id"], c["name"], f"{c['score']:.2f}/{c['max']:.1f}", "[green]PASS[/green]" if c["passed"] else "[yellow]WARN[/yellow]")
+    console.print(tbl)
+    if min_score > 0 and qr.overall_score < min_score:
+        console.print(f"[bold red]SBOM 质量分 {qr.overall_score:.2f} 低于门槛 {min_score:.2f}[/bold red]")
+        raise typer.Exit(code=1)
+
+
 @app.command()
 def version() -> None:
     """输出当前 OpenGuard 版本信息。"""
