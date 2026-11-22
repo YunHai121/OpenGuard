@@ -327,6 +327,22 @@ def create_app(db_path: Optional[Path] = None) -> FastAPI:
             raise HTTPException(status_code=404, detail=f"未找到扫描记录: {scan_id}")
         return evaluate_compliance(report)
 
+    @fastapi_app.get("/api/aibom")
+    def api_aibom(target: str) -> Dict[str, Any]:
+        from openguard.aibom import discover_ai_assets, render_cyclonedx_aibom
+
+        target_path = Path(target).resolve()
+        if not target_path.exists():
+            raise HTTPException(status_code=404, detail=f"目标路径不存在: {target}")
+        cfg = load_config(target_path if target_path.is_dir() else target_path.parent)
+        rep = discover_ai_assets(target_path, exclude_patterns=cfg.exclude_patterns)
+        return {
+            "target_name": rep.target_name,
+            "model_count": rep.model_count,
+            "dataset_count": rep.dataset_count,
+            "cyclonedx_aibom": render_cyclonedx_aibom(rep),
+        }
+
     @fastapi_app.get("/api/export/{scan_id}/{fmt}")
     def export_scan(scan_id: str, fmt: str) -> Response:
         report = store.get_report(scan_id)

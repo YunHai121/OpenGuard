@@ -278,6 +278,40 @@ function renderReport(report) {
   renderSbomTab(report);
   loadDoctorPosture(report);
   loadSbomQuality(report.scan_id);
+  loadCompliancePosture(report.scan_id);
+}
+
+async function loadCompliancePosture(scanId) {
+  const box = $('compliance-posture-container');
+  const badge = $('compliance-posture-summary');
+  if (!box || !badge || !scanId) return;
+  badge.textContent = '评估中...';
+  try {
+    const resp = await fetch(`/api/compliance/${encodeURIComponent(scanId)}`);
+    if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+    const data = await resp.json();
+    badge.textContent = `${data.status} · ${Number(data.passed_count)}/${Number(data.total_controls)} (${Number(data.compliance_rate).toFixed(1)}%)`;
+    const rows = (data.controls || [])
+      .map((c) => {
+        const cls = c.passed ? 'badge-low' : 'badge-crit';
+        return `<tr>
+          <td class="mono">${esc(c.id)}</td>
+          <td><strong>${esc(c.name)}</strong></td>
+          <td class="mono muted-xs">${esc(c.eu_cra)}</td>
+          <td class="mono muted-xs">${esc(c.nist_ssdf)}</td>
+          <td><span class="badge ${cls}">${c.passed ? 'PASS' : 'FAIL'}</span></td>
+          <td>${esc(c.evidence)}</td>
+        </tr>`;
+      })
+      .join('');
+    mountEscapedHtml(
+      box,
+      `<table class="data-table"><thead><tr><th>编号</th><th>合规控制项</th><th>EU CRA</th><th>NIST SSDF</th><th>状态</th><th>审计证据</th></tr></thead><tbody>${rows}</tbody></table>`
+    );
+  } catch (err) {
+    badge.textContent = '不可用';
+    mountEscapedHtml(box, `<div class="muted-xs">无法加载合规映射：${esc(err.message)}</div>`);
+  }
 }
 
 async function loadDoctorPosture(report) {

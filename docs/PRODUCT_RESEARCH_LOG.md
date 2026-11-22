@@ -401,3 +401,23 @@
 ### 验证结果
 - 新增 `tests/test_v27_ml_model_security_and_mcp_compliance.py`（3 项专项测试），全量单测增至 **119 / 119 通过**；
 - 自身审计：**100.0/100 (A+)**，**Quality Gate: PASSED**。
+
+---
+
+## Round #18 — 2026-11-22 13:28–13:36
+
+### 本轮重点对标产品与行业动态
+- **OWASP CycloneDX 1.6 ML-BOM / AIBOM & `cdxgen aibom` (2025–2026)**：随着 EU AI Act 与 NIST AI RMF 落地，传统仅覆盖软件包的 SBOM 已无法满足 AI 项目的供应链透明度要求。业界前沿工具通过静态代码与产物发现自动生成 **CycloneDX 1.6 ML-BOM（AIBOM）**，统一记录本地模型权重（SafeTensors / GGUF / ONNX / PyTorch，含 SHA-256 摘要与格式安全标记）、HuggingFace 开源模型与数据集引用（`pkg:huggingface/...` 与 `revision` 锁定状态）以及托管 LLM API 模型调用（OpenAI / Anthropic / Gemini / DeepSeek / Qwen / GLM 等），并附带 `modelCard` 元数据。
+- **Web 合规可视化闭环**：将上轮已落地的 EU CRA / NIST SSDF / OWASP SCVS 合规映射 API（`/api/compliance/{scan_id}`）直接呈现在 Web 工作台总览页，形成“质量门禁 + Doctor 态势 + 国际监管合规”三位一体视图。
+
+### 核心发现与已落地改进
+1. **CycloneDX 1.6 AI 物料清单（AIBOM / ML-BOM）静态发现引擎（`openguard/aibom.py` + `openguard aibom` + Web `/api/aibom`）**：
+   - 自动发现本地模型权重（`.safetensors`/`.gguf`/`.onnx`/`.pt`/`.ckpt`/`.pkl`/`.h5`，计算 SHA-256 摘要并区分安全格式 vs Pickle 反序列化风险）、Python AST HuggingFace `from_pretrained` / `load_dataset` 引用及 Python/JS/TS 托管 LLM API 模型调用；
+   - 输出符合 **CycloneDX 1.6** 规范的 JSON（`type: "machine-learning-model"` / `"data"`、`hashes`、`purl`、`modelCard`），支持 `openguard aibom [target] [-o aibom.cdx.json] [--json]` 与 `GET /api/aibom?target=...`。
+2. **Web 工作台总览页新增 EU CRA / NIST SSDF / OWASP SCVS 合规映射面板（`index.html` + `app.js`）**：
+   - 审计完成后自动拉取 `/api/compliance/{scan_id}`，在总览页安全渲染 8 项国际监管控制项达标率与审计证据。
+
+### 验证结果
+- `node --check openguard/web/static/app.js` 语法零错误；
+- 新增 `tests/test_v28_aibom_and_web_compliance.py`（2 项综合测试），全量单测增至 **121 / 121 通过**；
+- 自身审计：**100.0/100 (A+)**，**Quality Gate: PASSED**。

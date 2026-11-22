@@ -718,6 +718,54 @@ def compliance(
 
 
 @app.command()
+def aibom(
+    target: Path = typer.Argument(".", help="待静态发现 AI 模型、权重文件与数据集的目标仓库目录"),
+    output: Optional[Path] = typer.Option(None, "--output", "-o", help="导出 CycloneDX 1.6 ML-BOM JSON 文件路径"),
+    json_output: bool = typer.Option(False, "--json", help="向 stdout 输出纯净 CycloneDX 1.6 AIBOM JSON"),
+) -> None:
+    """静态发现仓库引用的 AI 模型、本地权重（SafeTensors/GGUF/ONNX/PyTorch）与数据集，生成 CycloneDX 1.6 ML-BOM (AIBOM)。"""
+    from openguard.aibom import discover_ai_assets, render_cyclonedx_aibom
+
+    if not target.exists():
+        err_console.print(f"[bold red]目标路径不存在:[/bold red] {target}")
+        raise typer.Exit(code=EXIT_USER_ERROR)
+
+    cfg = load_config(target if target.is_dir() else target.parent)
+    rep = discover_ai_assets(target, exclude_patterns=cfg.exclude_patterns)
+    cdx = render_cyclonedx_aibom(rep)
+
+    if output:
+        output.parent.mkdir(parents=True, exist_ok=True)
+        output.write_text(json.dumps(cdx, indent=2, ensure_ascii=False), encoding="utf-8")
+        notice_console = err_console if json_output else console
+        notice_console.print(f"[green]已导出 CycloneDX 1.6 AIBOM ({len(rep.assets)} 项 AI 资产):[/green] {output}")
+
+    if json_output:
+        sys.stdout.write(json.dumps(cdx, indent=2, ensure_ascii=False) + "\n")
+        sys.stdout.flush()
+        return
+
+    tbl = Table(
+        title=f"OpenGuard CycloneDX 1.6 AI 物料清单 (AIBOM) — 模型 {rep.model_count} 项 | 数据集 {rep.dataset_count} 项",
+        show_header=True,
+    )
+    tbl.add_column("资产名称")
+    tbl.add_column("类型")
+    tbl.add_column("来源/格式")
+    tbl.add_column("提供方")
+    tbl.add_column("位置")
+    tbl.add_column("安全/锁定状态")
+    for a in rep.assets:
+        status = (
+            "[green]安全格式[/green]"
+            if a.safe_format is True
+            else ("[bold red]Pickle 反序列化风险[/bold red]" if a.safe_format is False else ("[green]已锁版本[/green]" if a.pinned else "[yellow]未锁 revision[/yellow]"))
+        )
+        tbl.add_row(a.name, a.asset_type, a.format_name, a.provider, f"{a.source_file}:{a.line_number}", status)
+    console.print(tbl)
+
+
+@app.command()
 def version() -> None:
     """输出当前 OpenGuard 版本信息。"""
     console.print(f"OpenGuard (开源卫士) v{__version__}")
