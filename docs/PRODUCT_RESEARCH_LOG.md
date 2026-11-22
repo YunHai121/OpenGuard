@@ -357,3 +357,25 @@
 ### 验证结果
 - 新增 `tests/test_v25_multi_eco_remediation_and_benchmark.py`（3 项专项测试），全量单测增至 **113 / 113 通过**；
 - 自身审计：**100.0/100 (A+)**，**Quality Gate: PASSED**。
+
+---
+
+## Round #16 — 2026-11-22 11:28–11:36
+
+### 本轮重点对标产品与行业动态
+- **EU Cyber Resilience Act (CRA 2026) / NIST SSDF (SP 800-218) / OWASP SCVS + Trivy & Endor Labs 合规报告映射**：欧盟 CRA 强制要求软件提供方具备机读 SBOM、基于可达性的 VEX 可利用性证明（支撑 24h/72h ENISA 披露）、`SECURITY.md` 漏洞协调披露政策及安全 SDLC 门禁证据；业界领先工具将扫描产出直接映射至 **CRA Annex I / Art. 14**、**NIST SSDF** 与 **OWASP SCVS** 审计控制矩阵。
+- **Trivy / Gitleaks / Checkov 敏感提交文件与容器镜像层卫生防线**：纯文本密钥扫描器通常会跳过二进制文件（如 `.p12`/`.pfx`/`.jks`/`.keystore`），且 Dockerfile 中 `COPY .env` / `COPY *.pem` 会将本地凭据永久烘焙进镜像层。
+
+### 核心发现与已落地改进
+1. **EU CRA / NIST SSDF / OWASP SCVS 8 项合规映射引擎（`openguard/compliance.py` + `openguard compliance` + Web `/api/compliance/{scan_id}` + Markdown 报告内嵌）**：
+   - 将 OpenGuard 现有 SBOM NTIA 评分、CISA KEV/Call-Graph VEX 研判、`SECURITY.md`、零凭据泄露、许可证零冲突、SAST/IaC/CI 加固与零恶意安装钩子统一映射为 8 项确定性监管控制项（`OG-CMP-01`–`08`）；
+   - 新增 CLI **`openguard compliance [target] [--json] [-o report.md] [--fail-on-noncompliant]`**、REST API **`GET /api/compliance/{scan_id}`**，并在 `render_markdown_report()` 中自动追加第 9 节国际合规映射摘要表。
+2. **敏感提交文件与 Dockerfile 凭据打包防线（`openguard/scanners/iac_scanner.py` + `dockerfile_scanner.py`）**：
+   - **`OG-HYG-001` (`CRITICAL`)**：拦截误提交至仓库的二进制证书库与私钥/包仓凭据文件（`id_rsa`/`id_ed25519`/`*.p12`/`*.pfx`/`*.jks`/`*.keystore`/`.pypirc`/`.netrc`/`.htpasswd`）；
+   - **`OG-HYG-002` (`HIGH`)**：拦截误提交的运行时 `.env` / `.env.production` 文件（自动放行 `.env.example`/`.sample`/`.template`/`.dist`/`.test`/`.openguard.local`）；
+   - **`OG-DOCKER-006` (`HIGH`)**：拦截 Dockerfile 通过 `COPY`/`ADD` 将 `.env`/`.npmrc`/`.pypirc`/`*.pem`/`*.key`/`*.p12` 打包进容器镜像层（放行 `.env.example`）。
+
+### 验证结果
+- 新增 `tests/test_v26_compliance_and_sensitive_hygiene.py`（3 项综合测试），全量单测增至 **116 / 116 通过**；
+- `openguard compliance . --offline` 实测 OpenGuard 自身 **8/8 (100.0% COMPLIANT)**；
+- 自身审计：**100.0/100 (A+)**，**Quality Gate: PASSED**。

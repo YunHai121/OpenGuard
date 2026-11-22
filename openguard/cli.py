@@ -668,6 +668,56 @@ def doctor(
 
 
 @app.command()
+def compliance(
+    target: Path = typer.Argument(".", help="待执行 EU CRA / NIST SSDF / OWASP SCVS 合规映射的仓库目录"),
+    offline: bool = typer.Option(True, "--offline/--online", help="是否使用离线高速模式"),
+    json_output: bool = typer.Option(False, "--json", help="向 stdout 输出纯净 JSON 合规报告"),
+    output: Optional[Path] = typer.Option(None, "--output", "-o", help="导出合规审计报告 Markdown 文件路径"),
+    fail_on_noncompliant: bool = typer.Option(False, "--fail-on-noncompliant", help="若未 100% 合规则返回退出码 1"),
+) -> None:
+    """输出 EU CRA (网络弹性法案) / NIST SSDF / OWASP SCVS 8 项供应链合规映射报告。"""
+    from openguard.compliance import evaluate_compliance, render_compliance_markdown
+
+    if not target.exists():
+        err_console.print(f"[bold red]目标路径不存在:[/bold red] {target}")
+        raise typer.Exit(code=EXIT_USER_ERROR)
+
+    report = OpenGuardAuditor(AuditConfig(offline=offline)).audit(target)
+    data = evaluate_compliance(report)
+
+    if output:
+        md = render_compliance_markdown(data)
+        output.parent.mkdir(parents=True, exist_ok=True)
+        output.write_text(md, encoding="utf-8")
+        notice_console = err_console if json_output else console
+        notice_console.print(f"[green]已导出合规映射报告:[/green] {output}")
+
+    if json_output:
+        sys.stdout.write(json.dumps(data, indent=2, ensure_ascii=False) + "\n")
+        sys.stdout.flush()
+    else:
+        st_color = "bold green" if data["status"] == "COMPLIANT" else ("bold yellow" if data["status"] == "PARTIAL" else "bold red")
+        tbl = Table(
+            title=f"EU CRA / NIST SSDF / OWASP SCVS 合规映射 [{st_color}]{data['status']}[/{st_color}] "
+            f"({data['passed_count']}/{data['total_controls']} · {data['compliance_rate']:.1f}%)",
+            show_header=True,
+        )
+        tbl.add_column("编号")
+        tbl.add_column("合规控制项")
+        tbl.add_column("EU CRA")
+        tbl.add_column("NIST SSDF")
+        tbl.add_column("状态")
+        tbl.add_column("审计证据")
+        for c in data["controls"]:
+            st = "[green]PASS[/green]" if c["passed"] else "[bold red]FAIL[/bold red]"
+            tbl.add_row(c["id"], c["name"], c["eu_cra"], c["nist_ssdf"], st, c["evidence"])
+        console.print(tbl)
+
+    if fail_on_noncompliant and data["status"] != "COMPLIANT":
+        raise typer.Exit(code=EXIT_POLICY_VIOLATION)
+
+
+@app.command()
 def version() -> None:
     """输出当前 OpenGuard 版本信息。"""
     console.print(f"OpenGuard (开源卫士) v{__version__}")

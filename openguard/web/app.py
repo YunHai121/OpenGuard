@@ -318,6 +318,15 @@ def create_app(db_path: Optional[Path] = None) -> FastAPI:
             "checks": qr.checks,
         }
 
+    @fastapi_app.get("/api/compliance/{scan_id}")
+    def api_compliance(scan_id: str) -> Dict[str, Any]:
+        from openguard.compliance import evaluate_compliance
+
+        report = store.get_report(scan_id)
+        if not report:
+            raise HTTPException(status_code=404, detail=f"未找到扫描记录: {scan_id}")
+        return evaluate_compliance(report)
+
     @fastapi_app.get("/api/export/{scan_id}/{fmt}")
     def export_scan(scan_id: str, fmt: str) -> Response:
         report = store.get_report(scan_id)

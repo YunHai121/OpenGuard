@@ -19,6 +19,12 @@ ENV_SECRET_RE = re.compile(
     re.I,
 )
 PIPE_SHELL_RE = re.compile(r"(?:curl|wget)\s+[^|\n]*\|\s*(?:sh|bash|zsh|python)\b", re.I)
+COPY_SECRET_FILE_RE = re.compile(
+    r"^\s*(?:COPY|ADD)\s+(?:--\S+\s+)*[^\n]*(?:^|[\s/\"'])"
+    r"(?:\.env(?:\.(?:prod|production|local|staging|dev))?|\.npmrc|\.pypirc|id_rsa|id_ed25519|[A-Za-z0-9_.\-]+\.(?:pem|key|p12|pfx|jks))(?=$|[\s/\"'])",
+    re.I,
+)
+SAFE_ENV_TEMPLATE_RE = re.compile(r"\.env\.(?:example|sample|template|dist|test)\b", re.I)
 
 
 class DockerfileScanner:
@@ -159,6 +165,22 @@ class DockerfileScanner:
                         snippet=stripped[:180],
                         description="使用 `ADD http(s)://...` 自动拉取远程文件缺少哈希校验且会自动解压归档。",
                         remediation="改用 `RUN curl -fsSL ... && echo '<sha256> file' | sha256sum -c` 并优先使用 `COPY`。",
+                    )
+                )
+
+            # 6. COPY/ADD sensitive credential or private key files into container image
+            if COPY_SECRET_FILE_RE.match(raw) and not SAFE_ENV_TEMPLATE_RE.search(raw):
+                findings.append(
+                    CodeSecurityFinding(
+                        rule_id="OG-DOCKER-006",
+                        rule_name="Sensitive Credential / Key File Baked into Container Image",
+                        cwe_id="CWE-538",
+                        severity=Severity.HIGH,
+                        file_path=rel,
+                        line_number=idx,
+                        snippet=stripped[:180],
+                        description="Dockerfile 通过 `COPY`/`ADD` 将 `.env`、`.npmrc`/`.pypirc` 或私钥证书文件直接打包进镜像层，极易随镜像分发泄露凭据。",
+                        remediation="将敏感文件加入 `.dockerignore`，并在构建期使用 BuildKit `--mount=type=secret` 或运行时挂载 Secret。",
                     )
                 )
 

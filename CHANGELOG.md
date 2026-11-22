@@ -5,6 +5,8 @@ All notable changes to **OpenGuard (开源卫士)** are documented in this file 
 ## [Unreleased]
 
 ### Added
+- **EU CRA / NIST SSDF / OWASP SCVS 供应链合规映射引擎 (`compliance.py` + `openguard compliance` + `/api/compliance/{scan_id}`)**：对标 Endor Labs / Trivy 合规体系，自动将 SBOM NTIA 评分、Call-Graph VEX 研判、CISA KEV、`SECURITY.md`、零凭据泄露与 SAST/IaC 防线映射为 8 项国际监管控制项（`OG-CMP-01`–`08`），支持 `--json`、Markdown 导出、`--fail-on-noncompliant` 门禁及内嵌至审计报告第 9 节。
+- **敏感提交产物与容器镜像凭据打包防线 (`OG-HYG-001` / `OG-HYG-002` / `OG-DOCKER-006`)**：拦截误提交的二进制证书库（`.p12`/`.pfx`/`.jks`/`.keystore`）、SSH 私钥、`.pypirc`/`.netrc`、运行时 `.env`（自动放行模板文件）以及 Dockerfile `COPY`/`ADD` 凭据打包进镜像层。
 - **6 生态依赖自动安全升级与跨主版本保护 (`DependencyRemediator` + `openguard autofix --deps --no-major`)**：对标 OSV-Scanner V2 Guided Remediation 与 Renovate，在原有 PyPI/npm 基础上新增 `go.mod`、`Cargo.toml` 与 `pom.xml` 自动升级支持，内置 `[BREAKING MAJOR]` 破坏性主版本预警与 `--no-major` 跳过保护。
 - **可复现密钥检测基准集扩容至 260 条 (`benchmarks/`)**：新增 OpenRouter/xAI 密钥、Supabase `service_role` vs 公开 `anon` JWT、真/假 Base62 CRC32 GitHub PAT 样本，实测保持 `F1 = 1.0000 / FPR = 0.0000`（纯正则基线 FPR 为 `67.86%`）。
 - **GuardDog / Shai-Hulud / s1ngularity / tj-actions 2025–2026 供应链蠕虫行为防线 (`InstallScriptScanner` & `CIWorkflowScanner`)**：新增 Python `.pth` 启动持久化后门检测（`OG-SUP-PY-002`）、`setup.py` `cmdclass` 覆写与凭据外传关联检测（`OG-SUP-PY-003`）、npm `postinstall` 联动本地 JS 脚本追踪以拦截 s1ngularity/Nx 风格 AI CLI 越权劫持（`OG-SUP-NPM-004`）与凭据外发（`OG-SUP-NPM-005`），以及 `tj-actions`/`reviewdog` 可变标签投毒告警（`OG-CI-007`, `CRITICAL`）和 CI 日志凭据转储拦截（`OG-CI-008`）。

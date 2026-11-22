@@ -30,6 +30,18 @@ TF_PUBLIC_S3_RE = re.compile(
 )
 TF_NO_ENCRYPT_RE = re.compile(r"(?i)\b(?:storage_encrypted|encrypted)\s*=\s*false\b")
 
+SENSITIVE_EXACT_FILENAMES = frozenset({
+    "id_rsa",
+    "id_dsa",
+    "id_ecdsa",
+    "id_ed25519",
+    ".pypirc",
+    ".netrc",
+    ".htpasswd",
+})
+SENSITIVE_KEYSTORE_EXTS = (".p12", ".pfx", ".jks", ".keystore", ".ppk")
+SAFE_ENV_SUFFIXES = (".example", ".sample", ".template", ".dist", ".test", ".openguard.local")
+
 
 class IaCScanner:
     """Zero-dependency static IaC security scanner for Docker Compose, Kubernetes, and Terraform."""
@@ -68,6 +80,37 @@ class IaCScanner:
                 if is_path_excluded(rel, excludes):
                     continue
                 low = fname.lower()
+                # Sensitive committed credential/keystore artifact hygiene checks (Trivy/Gitleaks/Checkov)
+                if low in SENSITIVE_EXACT_FILENAMES or low.endswith(SENSITIVE_KEYSTORE_EXTS):
+                    findings.append(
+                        CodeSecurityFinding(
+                            rule_id="OG-HYG-001",
+                            rule_name="Committed Private Key, Keystore or Registry Credential File",
+                            cwe_id="CWE-312",
+                            severity=Severity.CRITICAL,
+                            file_path=rel,
+                            line_number=1,
+                            snippet=fname,
+                            description=f"代码仓中直接提交了高危密钥/证书库或包仓库凭据文件 `{rel}`（二进制证书库常绕过纯文本密钥扫描器）。",
+                            remediation="立即从 Git 仓库与历史中清除该文件，将其加入 `.gitignore`，并轮换其中包含的私钥或凭据。",
+                        )
+                    )
+                    continue
+                if (low == ".env" or low.startswith(".env.")) and not any(low.endswith(sfx) for sfx in SAFE_ENV_SUFFIXES):
+                    findings.append(
+                        CodeSecurityFinding(
+                            rule_id="OG-HYG-002",
+                            rule_name="Committed Live .env Environment File in Repository",
+                            cwe_id="CWE-538",
+                            severity=Severity.HIGH,
+                            file_path=rel,
+                            line_number=1,
+                            snippet=fname,
+                            description=f"仓库中包含运行时环境配置文件 `{rel}`（非 `.env.example`/`.env.sample` 模板），极易泄露生产密钥与数据库口令。",
+                            remediation="将其从版本控制移除并追加 `.env` / `.env.*` 到 `.gitignore`，仅提交脱敏后的 `.env.example`。",
+                        )
+                    )
+                    continue
                 if low.endswith(".tf") or self.is_compose_file(low) or low.endswith((".yml", ".yaml")):
                     # Skip GitHub/GitLab CI YAML handled by CIWorkflowScanner
                     if ".github/workflows/" in f"/{rel.lower()}" or low == ".gitlab-ci.yml":

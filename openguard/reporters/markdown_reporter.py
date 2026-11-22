@@ -116,6 +116,25 @@ def render_markdown_report(report: AuditReport) -> str:
         for step in s.roadmap:
             lines.append(f"- **[{step['priority']}] {step['title']}**：{step['action']}")
 
+    from openguard.compliance import evaluate_compliance
+
+    comp = evaluate_compliance(report)
+    lines.extend([
+        "",
+        "## 9. 国际供应链合规映射摘要 (EU CRA / NIST SSDF / OWASP SCVS)",
+        "",
+        f"> **合规状态**: **{comp['status']}** ({comp['passed_count']}/{comp['total_controls']} 项通过 · "
+        f"达标率 **{comp['compliance_rate']:.1f}%**) | "
+        f"**NTIA SBOM 质量分**: `{comp['sbom_quality_score']:.2f}/10.0 ({comp['sbom_quality_grade']})`",
+        "",
+        "| 控制编号 | 合规控制项 | EU CRA | NIST SSDF | OWASP SCVS | 状态 |",
+        "| :--- | :--- | :--- | :--- | :--- | :---: |",
+    ])
+    for c in comp["controls"]:
+        lines.append(
+            f"| `{c['id']}` | {c['name']} | {c['eu_cra']} | {c['nist_ssdf']} | {c['owasp_scvs']} | **{'PASS' if c['passed'] else 'FAIL'}** |"
+        )
+
     lines.append("")
     return "\n".join(lines)
 
