@@ -129,6 +129,21 @@ MCP_TOOLS: List[Dict[str, Any]] = [
             "required": ["target_path"],
         },
     },
+    {
+        "name": "evaluate_compliance",
+        "description": (
+            "Evaluate a repository against 8 EU Cyber Resilience Act (CRA), NIST SSDF (SP 800-218), and "
+            "OWASP SCVS supply-chain controls, returning compliance rate, VEX triage summary, and remediation guidance."
+        ),
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "target_path": {"type": "string", "description": "Local repository directory path to evaluate."},
+                "offline": {"type": "boolean", "default": True, "description": "Use offline CVE DB only (fast)."},
+            },
+            "required": ["target_path"],
+        },
+    },
 ]
 
 
@@ -230,6 +245,14 @@ def _handle_tool_call(name: str, arguments: Dict[str, Any]) -> Dict[str, Any]:
             "component_count": qr.component_count,
             "checks": qr.checks,
         }
+
+    if name == "evaluate_compliance":
+        from openguard.compliance import evaluate_compliance
+
+        target = str(arguments["target_path"])
+        offline = bool(arguments.get("offline", True))
+        report = OpenGuardAuditor(AuditConfig(offline=offline)).audit(target)
+        return evaluate_compliance(report)
 
     raise ValueError(f"Unknown OpenGuard MCP tool: {name}")
 

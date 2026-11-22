@@ -176,7 +176,7 @@ class CodeSecurityScanner:
                         )
                     )
 
-                # 2. CWE-502: Unsafe deserialization (pickle.loads / yaml.load without SafeLoader)
+                # 2. CWE-502: Unsafe deserialization (pickle.loads / yaml.load / PyTorch / NumPy ML)
                 elif func_name in ("pickle.loads", "pickle.load", "marshal.loads", "shelve.open"):
                     findings.append(
                         CodeSecurityFinding(
@@ -189,6 +189,61 @@ class CodeSecurityScanner:
                             snippet=snippet_at(ln),
                             description=f"`{func_name}()` 反序列化不可信数据时可直接触发任意代码执行。",
                             remediation="改用 `json.loads()` 等无代码执行能力的安全序列化格式。",
+                        )
+                    )
+                elif func_name == "torch.load":
+                    wo_kw = [kw for kw in node.keywords if kw.arg == "weights_only"]
+                    wo_is_true = any(
+                        isinstance(kw.value, ast.Constant) and kw.value.value is True for kw in wo_kw
+                    )
+                    if not wo_is_true:
+                        findings.append(
+                            CodeSecurityFinding(
+                                rule_id="OG-SAST-ML-001",
+                                rule_name="Unsafe PyTorch torch.load() Without weights_only=True",
+                                cwe_id="CWE-502",
+                                severity=Severity.HIGH,
+                                file_path=file_path,
+                                line_number=ln,
+                                snippet=snippet_at(ln),
+                                description="`torch.load()` 未显式启用 `weights_only=True`（或显式设为 `False`），加载外部模型权重时易遭 Pickle 反序列化 RCE（OWASP LLM03）。",
+                                remediation="设置 `torch.load(path, weights_only=True)`，并优先将模型权重迁移至无代码执行能力的 `safetensors` 格式。",
+                            )
+                        )
+                elif (
+                    func_name.endswith(".from_pretrained") or func_name in ("from_pretrained", "load_dataset", "datasets.load_dataset")
+                ) and any(
+                    kw.arg == "trust_remote_code" and isinstance(kw.value, ast.Constant) and kw.value.value is True
+                    for kw in node.keywords
+                ):
+                    findings.append(
+                        CodeSecurityFinding(
+                            rule_id="OG-SAST-ML-002",
+                            rule_name="HuggingFace Remote Code Execution Enabled (trust_remote_code=True)",
+                            cwe_id="CWE-829",
+                            severity=Severity.HIGH,
+                            file_path=file_path,
+                            line_number=ln,
+                            snippet=snippet_at(ln),
+                            description=f"`{func_name}(..., trust_remote_code=True)` 会自动下载并执行外部模型/数据集仓库中的任意 Python 代码（OWASP LLM03）。",
+                            remediation="禁用 `trust_remote_code=True` 或锁定特定经审计的不可变 `revision='<commit-sha>'` 并在隔离沙箱中加载。",
+                        )
+                    )
+                elif func_name in ("np.load", "numpy.load") and any(
+                    kw.arg == "allow_pickle" and isinstance(kw.value, ast.Constant) and kw.value.value is True
+                    for kw in node.keywords
+                ):
+                    findings.append(
+                        CodeSecurityFinding(
+                            rule_id="OG-SAST-ML-003",
+                            rule_name="Unsafe NumPy np.load(..., allow_pickle=True)",
+                            cwe_id="CWE-502",
+                            severity=Severity.MEDIUM,
+                            file_path=file_path,
+                            line_number=ln,
+                            snippet=snippet_at(ln),
+                            description="`numpy.load()` 开启 `allow_pickle=True` 允许反序列化任意 Python 对象，加载外部 `.npy`/`.npz` 数据集存在 RCE 风险。",
+                            remediation="移除 `allow_pickle=True`（保持默认 `False`）或改用 `safetensors` / Apache Parquet 等纯数据格式。",
                         )
                     )
                 elif func_name == "yaml.load":

@@ -5,6 +5,8 @@ All notable changes to **OpenGuard (开源卫士)** are documented in this file 
 ## [Unreleased]
 
 ### Added
+- **AI/ML 模型权重反序列化扫描器与 ML 框架 SAST（对标 Protect AI ModelScan / Fickling / OWASP LLM03）**：新增零依赖、零执行静态反汇编引擎 `MLModelScanner`（`OG-ML-001`，支持原始 Pickle 协议 0–5 与 PyTorch ZIP 权重内 `data.pkl`），以及 `torch.load` 缺 `weights_only=True`（`OG-SAST-ML-001`）、HuggingFace `trust_remote_code=True`（`OG-SAST-ML-002`）与 `np.load(allow_pickle=True)`（`OG-SAST-ML-003`）AST 审计规则。
+- **MCP Server 扩展至 7 项工具**：新增 `evaluate_compliance`，向 AI 编程助手直接暴露 EU CRA / NIST SSDF / OWASP SCVS 合规评估能力。
 - **EU CRA / NIST SSDF / OWASP SCVS 供应链合规映射引擎 (`compliance.py` + `openguard compliance` + `/api/compliance/{scan_id}`)**：对标 Endor Labs / Trivy 合规体系，自动将 SBOM NTIA 评分、Call-Graph VEX 研判、CISA KEV、`SECURITY.md`、零凭据泄露与 SAST/IaC 防线映射为 8 项国际监管控制项（`OG-CMP-01`–`08`），支持 `--json`、Markdown 导出、`--fail-on-noncompliant` 门禁及内嵌至审计报告第 9 节。
 - **敏感提交产物与容器镜像凭据打包防线 (`OG-HYG-001` / `OG-HYG-002` / `OG-DOCKER-006`)**：拦截误提交的二进制证书库（`.p12`/`.pfx`/`.jks`/`.keystore`）、SSH 私钥、`.pypirc`/`.netrc`、运行时 `.env`（自动放行模板文件）以及 Dockerfile `COPY`/`ADD` 凭据打包进镜像层。
 - **6 生态依赖自动安全升级与跨主版本保护 (`DependencyRemediator` + `openguard autofix --deps --no-major`)**：对标 OSV-Scanner V2 Guided Remediation 与 Renovate，在原有 PyPI/npm 基础上新增 `go.mod`、`Cargo.toml` 与 `pom.xml` 自动升级支持，内置 `[BREAKING MAJOR]` 破坏性主版本预警与 `--no-major` 跳过保护。

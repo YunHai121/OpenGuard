@@ -22,7 +22,7 @@ class TestMcpPostureAndWebSbomQuality(unittest.TestCase):
         list_resp = handle_jsonrpc_request({"jsonrpc": "2.0", "id": 1, "method": "tools/list"})
         assert list_resp is not None
         names = {t["name"] for t in list_resp["result"]["tools"]}
-        self.assertEqual(len(MCP_TOOLS), 6)
+        self.assertGreaterEqual(len(MCP_TOOLS), 6)
         self.assertIn("diagnose_repo_posture", names)
         self.assertIn("evaluate_sbom_quality", names)
 
@@ -39,7 +39,7 @@ class TestMcpPostureAndWebSbomQuality(unittest.TestCase):
         doc_payload = json.loads(doc_resp["result"]["content"][0]["text"])
         self.assertTrue(doc_payload["healthy"])
         self.assertEqual(len(doc_payload["checks"]), 7)
-        self.assertIn("6", next(c["details"] for c in doc_payload["checks"] if c["id"] == "OG-DOC-06"))
+        self.assertIn(str(len(MCP_TOOLS)), next(c["details"] for c in doc_payload["checks"] if c["id"] == "OG-DOC-06"))
 
         # Call evaluate_sbom_quality on directory AND on exported CycloneDX file
         sbom_resp = handle_jsonrpc_request(

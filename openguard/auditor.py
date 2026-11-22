@@ -34,6 +34,7 @@ from openguard.scanners.governance_checker import GovernanceChecker
 from openguard.scanners.iac_scanner import IaCScanner
 from openguard.scanners.install_script_scanner import InstallScriptScanner
 from openguard.scanners.license_analyzer import LicenseAnalyzer
+from openguard.scanners.ml_model_scanner import MLModelScanner
 from openguard.scanners.policy_engine import PolicyEngine
 from openguard.scanners.reachability_analyzer import ReachabilityAnalyzer
 from openguard.scanners.secret_scanner import SecretScanner
@@ -161,6 +162,7 @@ class OpenGuardAuditor:
         code_findings.extend(DockerfileScanner().scan_repository(resolved, exclude_patterns=cfg.exclude_patterns))
         code_findings.extend(IaCScanner().scan_repository(resolved, exclude_patterns=cfg.exclude_patterns))
         code_findings.extend(AIConfigSecurityScanner().scan_repository(resolved, exclude_patterns=cfg.exclude_patterns))
+        code_findings.extend(MLModelScanner().scan_repository(resolved, exclude_patterns=cfg.exclude_patterns))
 
         policy_engine = PolicyEngine()
         code_findings.extend(policy_engine.scan_custom_code_rules(resolved, cfg))

@@ -379,3 +379,25 @@
 - 新增 `tests/test_v26_compliance_and_sensitive_hygiene.py`（3 项综合测试），全量单测增至 **116 / 116 通过**；
 - `openguard compliance . --offline` 实测 OpenGuard 自身 **8/8 (100.0% COMPLIANT)**；
 - 自身审计：**100.0/100 (A+)**，**Quality Gate: PASSED**。
+
+---
+
+## Round #17 — 2026-11-22 12:28–12:35
+
+### 本轮重点对标产品与行业动态
+- **Protect AI ModelScan / Trail of Bits Fickling & OWASP LLM03 (AI 供应链安全)**：高校与工业界开源 AI 项目广泛使用 PyTorch `.pt`/`.pth`/`.bin` 与 Pickle 模型权重，而 Pickle 本质上是基于栈的虚拟机代码（`GLOBAL` / `INST` / `STACK_GLOBAL` + `REDUCE`），在调用 `torch.load()` 时即可触发无交互 RCE；同时 HuggingFace `trust_remote_code=True` 与 `numpy.load(allow_pickle=True)` 构成 AI 供应链核心代码级执行入口（OWASP LLM03）。
+- **零执行安全反汇编原理**：基于 Python 标准库 `pickletools.genops()` + `zipfile` 静态反汇编原始 Pickle 与 PyTorch ZIP 归档内的 `archive/data.pkl`，无需执行 `pickle.load()` 即可零风险检出 `os.system`/`posix.system`/`subprocess.Popen`/`builtins.eval`/`operator.attrgetter` 等恶意执行原语，零多余外部依赖。
+
+### 核心发现与已落地改进
+1. **AI/ML 模型权重反序列化投毒扫描器（`openguard/scanners/ml_model_scanner.py` + `auditor.py` 集成）**：
+   - **`OG-ML-001` (`CRITICAL`, `CWE-502`)**：零执行静态反汇编 `*.pkl`、`*.pickle`、`*.pt`、`*.pth`（二进制）、`*.ckpt`、`*.joblib`、`*.bin`（覆盖原始 Pickle 协议 0–5 及 PyTorch ZIP 打包权重内的 `data.pkl`），追踪 `GLOBAL`/`INST`/`STACK_GLOBAL` 指令栈拦截高危执行原语，良性模型权重零误报，并建议迁移至 `safetensors`。
+2. **ML 框架静态代码安全规则扩容（`openguard/scanners/code_security_scanner.py`）**：
+   - **`OG-SAST-ML-001` (`HIGH`)**：检出未设置 `weights_only=True`（或显式 `weights_only=False`）的 `torch.load()` 调用；
+   - **`OG-SAST-ML-002` (`HIGH`)**：检出 HuggingFace `from_pretrained(..., trust_remote_code=True)` / `load_dataset(..., trust_remote_code=True)` 远端代码自动执行；
+   - **`OG-SAST-ML-003` (`MEDIUM`)**：检出 `np.load(..., allow_pickle=True)` / `numpy.load(..., allow_pickle=True)` 反序列化隐患。
+3. **MCP Server 扩容至 7 项 AI 代理工具（`openguard/mcp_server.py`）**：
+   - 新增第 7 项工具 **`evaluate_compliance`**，使 Claude Code / Cursor / Antigravity 可一键评估目标仓库的 EU CRA / NIST SSDF / OWASP SCVS 8 项合规状态与 VEX 研判汇总。
+
+### 验证结果
+- 新增 `tests/test_v27_ml_model_security_and_mcp_compliance.py`（3 项专项测试），全量单测增至 **119 / 119 通过**；
+- 自身审计：**100.0/100 (A+)**，**Quality Gate: PASSED**。
