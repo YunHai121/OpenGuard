@@ -313,3 +313,27 @@
 ### 验证结果
 - 新增 `tests/test_v23_ai_cloud_secrets_and_supabase_jwt.py`（3 项专项测试，全程动态构造测试 Token 杜绝静态泄露误触发），全量单测增至 **106 / 106 通过**；
 - 自身审计：**100.0/100 (A+)**，**Quality Gate: PASSED**；打标 `v1.4.0` 并双仓同步。
+
+---
+
+## Round #14 — 2026-11-22 09:28–09:36
+
+### 本轮重点对标产品与行业动态
+- **Datadog GuardDog / Socket.dev 恶意包静态行为启发式引擎**：相比仅依赖已知 CVE 签名，现代供应链安全工具重点通过静态语义与行为关联拦截零日恶意包——尤其是 Python `setup.py` `cmdclass` 覆写安装命令、`.pth` 启动期自动执行持久化后门（`import ...` 随解释器启动自动执行）以及 `os.environ` 凭据读取与网络外传的组合特征。
+- **2025–2026 三大真实供应链蠕虫/投毒事件静态 IOC 复盘**：
+  1. **Shai-Hulud / Mini Shai-Hulud（npm & PyPI 跨生态蠕虫）**：利用 `.pth` 启动钩子与窃密外传持续感染开发机与 CI；
+  2. **s1ngularity / Nx 投毒事件（npm）**：通过 `package.json` `postinstall: "node telemetry.js"` 间接调用本地 JS 脚本，武器化本机 AI 编程 CLI（`claude --dangerously-skip-permissions`、`gemini --yolo`、`--trust-all-tools`）批量检索 `.env`/SSH 私钥并外发；
+  3. **tj-actions/changed-files (`CVE-2025-30066`, CISA KEV) & `reviewdog/action-setup` (`CVE-2025-30154`)**：篡改可变 Action Tag 并通过日志输出窃取 CI Secrets。
+
+### 核心发现与已落地改进
+1. **供应链蠕虫与 GuardDog 行为防线升级（`openguard/scanners/install_script_scanner.py`）**：
+   - **`OG-SUP-PY-002`（Python `.pth` 启动持久化后门）**：扫描仓库内所有 `*.pth` 文件，拦截含可执行 `import ` 语句的恶意持久化钩子（含 `exec`/`eval`/`base64`/`subprocess`/`socket` 时直升 `CRITICAL`/`P0`，纯路径 `.pth` 零误报）；
+   - **`OG-SUP-PY-003`（`setup.py` GuardDog `cmdclass` 与凭据外传关联）**：AST 识别 `cmdclass={"install"|"develop"|"egg_info"|"build_py"}` 覆写，以及 `os.environ`/`.aws`/`.npmrc` 读取与网络请求或 `base64`/`zlib` 解混淆的攻击链组合；
+   - **`OG-SUP-NPM-004` & `OG-SUP-NPM-005`（npm 联动 JS 脚本溯源 & AI CLI 劫持拦截）**：解析 `package.json` 生命周期钩子中引用的本地脚本（如 `node telemetry.js`），精准捕获 s1ngularity/Nx 风格的 AI CLI 越权标志（`--dangerously-skip-permissions`/`--yolo`/`--trust-all-tools`）、破坏性 Shell 注入与 `process.env` 凭据外传（如 `webhook.site`/`fetch`/`https.request`）。
+2. **CI/CD 已知投毒 Action 与日志泄密防线（`openguard/scanners/ci_workflow_scanner.py`）**：
+   - **`OG-CI-007`（`CRITICAL`）**：当工作流通过可变 Tag 引用历史曾遭投毒的高危 Action（`tj-actions/changed-files`、`tj-actions/eslint-changed-files`、`reviewdog/action-setup`）时立即升级为 `CRITICAL` 阻断（已锁 40 位 Commit SHA 不误报）；
+   - **`OG-CI-008`（`HIGH`）**：检测 `${{ toJSON(secrets) }}` 与 `printenv | base64` 等构建日志凭据转储行为。
+
+### 验证结果
+- 新增 `tests/test_v24_supply_chain_worms_and_ci_compromise.py`（4 项专项测试），全量单测增至 **110 / 110 通过**；
+- 自身审计：**100.0/100 (A+)**，**Quality Gate: PASSED**。

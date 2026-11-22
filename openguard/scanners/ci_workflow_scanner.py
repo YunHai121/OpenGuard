@@ -29,6 +29,15 @@ PERMISSIONS_TOP_RE = re.compile(r"^permissions\s*:", re.M)
 PERMISSIONS_WRITE_ALL_RE = re.compile(r"^\s*permissions\s*:\s*write-all\b", re.I)
 PRT_TRIGGER_RE = re.compile(r"\bpull_request_target\b")
 UNTRUSTED_PR_REF_RE = re.compile(r"github\.event\.pull_request\.head\.(?:sha|ref)")
+SECRET_LOG_DUMP_RE = re.compile(
+    r"(?:\$\{\{\s*toJSON\(\s*secrets\s*\)\s*\}\}|(?:printenv|\benv\b)\s*\|\s*base64)",
+    re.I,
+)
+KNOWN_COMPROMISED_ACTIONS = {
+    "tj-actions/changed-files": "CVE-2025-30066 (CISA KEV，2025年3月全版本可变标签被篡改窃取 CI Secrets)",
+    "tj-actions/eslint-changed-files": "2025年3月 tj-actions 供应链关联投毒事件",
+    "reviewdog/action-setup": "CVE-2025-30154 (2025年3月 v1 可变标签遭篡改注入窃密载荷)",
+}
 
 
 class CIWorkflowScanner:
@@ -136,27 +145,59 @@ class CIWorkflowScanner:
                     )
                 )
 
-            # Rule OG-CI-001: Unpinned third-party Action
+            # Rule OG-CI-001 & OG-CI-007: Unpinned / Known-Compromised third-party Action
             m_uses = ACTION_USES_RE.match(raw)
             if m_uses:
                 action_ref = m_uses.group(1)
                 if not action_ref.startswith("./") and not action_ref.startswith("docker://"):
                     if "@" in action_ref:
-                        _, ref = action_ref.rsplit("@", 1)
+                        action_name, ref = action_ref.rsplit("@", 1)
+                        action_key = action_name.lower().strip()
                         if not SHA40_RE.match(ref):
-                            findings.append(
-                                CodeSecurityFinding(
-                                    rule_id="OG-CI-001",
-                                    rule_name="Unpinned Third-Party GitHub Action (Mutable Tag/Branch)",
-                                    cwe_id="CWE-829",
-                                    severity=Severity.MEDIUM,
-                                    file_path=rel,
-                                    line_number=idx,
-                                    snippet=stripped[:180],
-                                    description=f"第三方 Action `{action_ref}` 引用了可变标签/分支 `@{ref}`，易遭上游 Tag 篡改投毒（OpenSSF Pinned-Dependencies）。",
-                                    remediation="将该 Action 锁定至不可变的 40 位完整 Commit SHA（如 `actions/checkout@<40-char-sha> # v4`）。",
+                            if action_key in KNOWN_COMPROMISED_ACTIONS:
+                                findings.append(
+                                    CodeSecurityFinding(
+                                        rule_id="OG-CI-007",
+                                        rule_name="Known-Compromised GitHub Action Referenced by Mutable Tag",
+                                        cwe_id="CWE-829",
+                                        severity=Severity.CRITICAL,
+                                        file_path=rel,
+                                        line_number=idx,
+                                        snippet=stripped[:180],
+                                        description=f"工作流通过可变标签引用曾遭供应链投毒的高危 Action `{action_ref}`（{KNOWN_COMPROMISED_ACTIONS[action_key]}）。",
+                                        remediation="立即替换为经审计的安全 40 位 Commit SHA 或移除该第三方 Action，并轮换所有 CI Secrets。",
+                                    )
                                 )
-                            )
+                            else:
+                                findings.append(
+                                    CodeSecurityFinding(
+                                        rule_id="OG-CI-001",
+                                        rule_name="Unpinned Third-Party GitHub Action (Mutable Tag/Branch)",
+                                        cwe_id="CWE-829",
+                                        severity=Severity.MEDIUM,
+                                        file_path=rel,
+                                        line_number=idx,
+                                        snippet=stripped[:180],
+                                        description=f"第三方 Action `{action_ref}` 引用了可变标签/分支 `@{ref}`，易遭上游 Tag 篡改投毒（OpenSSF Pinned-Dependencies）。",
+                                        remediation="将该 Action 锁定至不可变的 40 位完整 Commit SHA（如 `actions/checkout@<40-char-sha> # v4`）。",
+                                    )
+                                )
+
+            # Rule OG-CI-008: Explicit secret/env dumping into CI workflow logs
+            if SECRET_LOG_DUMP_RE.search(raw):
+                findings.append(
+                    CodeSecurityFinding(
+                        rule_id="OG-CI-008",
+                        rule_name="CI Workflow Secret / Environment Dump to Build Logs",
+                        cwe_id="CWE-532",
+                        severity=Severity.HIGH,
+                        file_path=rel,
+                        line_number=idx,
+                        snippet=stripped[:180],
+                        description="工作流将 `secrets` 或环境变量编码后直接输出至构建日志，极易绕过 CI 掩码导致凭据泄露。",
+                        remediation="严禁在构建脚本中使用 `toJSON(secrets)` 或 `printenv | base64` 打印敏感上下文。",
+                    )
+                )
 
             # Rule OG-CI-003: pull_request_target + untrusted PR head checkout
             if has_prt and UNTRUSTED_PR_REF_RE.search(raw):

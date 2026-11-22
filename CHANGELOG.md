@@ -2,6 +2,11 @@
 
 All notable changes to **OpenGuard (开源卫士)** are documented in this file following [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and Semantic Versioning.
 
+## [Unreleased]
+
+### Added
+- **GuardDog / Shai-Hulud / s1ngularity / tj-actions 2025–2026 供应链蠕虫行为防线 (`InstallScriptScanner` & `CIWorkflowScanner`)**：新增 Python `.pth` 启动持久化后门检测（`OG-SUP-PY-002`）、`setup.py` `cmdclass` 覆写与凭据外传关联检测（`OG-SUP-PY-003`）、npm `postinstall` 联动本地 JS 脚本追踪以拦截 s1ngularity/Nx 风格 AI CLI 越权劫持（`OG-SUP-NPM-004`）与凭据外发（`OG-SUP-NPM-005`），以及 `tj-actions`/`reviewdog` 可变标签投毒告警（`OG-CI-007`, `CRITICAL`）和 CI 日志凭据转储拦截（`OG-CI-008`）。
+
 ## [1.4.0] - 2026-11-22
 
 ### Added
