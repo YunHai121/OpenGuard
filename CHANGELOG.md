@@ -2,10 +2,11 @@
 
 All notable changes to **OpenGuard (开源卫士)** are documented in this file following [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and Semantic Versioning.
 
-## [Unreleased]
+## [1.4.0] - 2026-11-22
 
 ### Added
-- **MCP Server 6 工具扩容与 Web 工作台态势/SBOM 质量面板（对标 Snyk/Semgrep MCP & Dependency-Track v5）**：`openguard mcp` 新增 `diagnose_repo_posture`（7 项仓库防线自检）与 `evaluate_sbom_quality`（NTIA 7 要素质量评分）工具；Web 后端新增 `GET /api/doctor` 与 `GET /api/sbom-quality/{scan_id}`，并在前端总览页与 SBOM 页同屏展示实时诊断与合规评分；同步刷新 `docs/INSTALLATION_AND_USAGE.md`。
+- **2025–2026 AI 网关/云原生凭据检测扩容（46 → 54 条）与 Supabase JWT 角色智能判别（对标 GitHub Secret Scanning / TruffleHog / Kingfisher / GitGuardian）**：新增 OpenRouter (`OG-SEC-045`)、xAI Grok (`OG-SEC-046`)、Perplexity (`OG-SEC-047`)、Vercel Blob (`OG-SEC-048`)、LangSmith (`OG-SEC-049`)、Linear (`OG-SEC-050`)、Supabase Secret/PAT (`OG-SEC-044`) 与 Anthropic Admin/OAuth 扩展支持，扩展国产大模型上下文词表（豆包/火山方舟 Ark/混元/阶跃星辰/Mistral/Cohere）；解码 JWT 载荷精准区分 `service_role` 致命管理员泄露（`OG-SEC-043`, `CRITICAL`）与客户端公开 `anon` Key（零误报抑制）。
+- **MCP Server 6 工具扩容与 Web 工作台态势/SBOM 质量面板（对标 Snyk/Semgrep MCP & Dependency-Track v5）**：`openguard mcp` 新增 `diagnose_repo_posture`（7 项仓库防线自检）与 `evaluate_sbom_quality`（NTIA 7 要素质量评分）工具；Web 后端新增 `GET /api/doctor` 与 `GET /api/sbom-quality/{scan_id}`，并在前端总览页与 SBOM 页同屏展示实时诊断与合规评分；同步刷新 `docs/INSTALLATION_AND_USAGE.md` 与 `README.md`。
 - **开发者体验与 CLI 机器可读契约升级 (`dx.py` + `openguard init` / `openguard doctor` / `scan --json --audit-mode`)**：对标 Biome / Ruff / Snyk / Trivy，新增自动技术栈探测与幂等仓库初始化（`openguard init`）、7 项环境与供应链就绪度诊断（`openguard doctor`）、纯净 stdout JSON 输出（`--json`，错误/通知分流 stderr）、非阻塞观察模式（`--audit-mode`）以及标准 `0/1/2/3` 分级退出码协议；同步刷新 `docs/ARCHITECTURE.md` 至 v1.3+ 全景架构。
 - **SBOM Diff 供应链漂移检测 & NTIA 质量评分器 (`sbom_tools.py` + `openguard sbom-diff` / `openguard sbom-score`)**：对标 GitHub Dependency Review Action 与 `sbomqs`，支持对比两份 CycloneDX SBOM 的组件变更、Copyleft 许可证漂移与新增漏洞（`--fail-on-drift`），并依据 7 项 NTIA/CISA 最小要素对 SBOM 进行 0–10.0 质量打分（`--min-score`）。
 - **2025–2026 离线高危 CVE & CISA KEV 情报扩容**：新增 React RSC (`CVE-2025-55182`)、Next.js (`CVE-2025-66478`)、Brotli HTTP2Shell (`CVE-2026-111497`) 与 Axios (`CVE-2026-67313`/`CVE-2026-67319`) 检测及 KEV/EPSS 评分。

@@ -1,4 +1,4 @@
-"""Curated 45+ secret detection rules with deterministic structural validators."""
+"""Curated 54 high-signal secret detection rules with deterministic structural & CRC32 validators."""
 
 from __future__ import annotations
 
@@ -7,7 +7,7 @@ import json
 import re
 import zlib
 from dataclasses import dataclass
-from typing import Callable, List, Optional, Pattern
+from typing import Any, Callable, Dict, List, Optional, Pattern, Tuple
 
 from openguard.models import Severity
 
@@ -60,19 +60,52 @@ def validate_github_token_crc32(token: str) -> bool:
     return _to_base62(crc, width=6) == expected_b62
 
 
-def validate_jwt(token: str) -> bool:
-    """Validate that a JWT string decodes cleanly into JSON header & payload."""
+def _decode_jwt_parts(token: str) -> Optional[Tuple[Dict[str, Any], Dict[str, Any]]]:
     parts = token.strip().split(".")
     if len(parts) != 3:
-        return False
+        return None
     try:
         header_b64 = parts[0] + "=" * ((4 - len(parts[0]) % 4) % 4)
         payload_b64 = parts[1] + "=" * ((4 - len(parts[1]) % 4) % 4)
         header = json.loads(base64.urlsafe_b64decode(header_b64).decode("utf-8"))
         payload = json.loads(base64.urlsafe_b64decode(payload_b64).decode("utf-8"))
-        return isinstance(header, dict) and isinstance(payload, dict) and ("alg" in header or "typ" in header)
+        if isinstance(header, dict) and isinstance(payload, dict) and ("alg" in header or "typ" in header):
+            return header, payload
+        return None
     except Exception:
+        return None
+
+
+def is_supabase_anon_jwt(token: str) -> bool:
+    """Return True for intentionally public client-side Supabase `anon` JWT keys (reduces false positives)."""
+    decoded = _decode_jwt_parts(token)
+    if not decoded:
         return False
+    _, payload = decoded
+    return str(payload.get("iss", "")).lower() == "supabase" and str(payload.get("role", "")).lower() == "anon"
+
+
+def validate_supabase_service_role_jwt(token: str) -> bool:
+    """Return True strictly for privileged Supabase `service_role` admin JWTs (CRITICAL backend leak)."""
+    decoded = _decode_jwt_parts(token)
+    if not decoded:
+        return False
+    _, payload = decoded
+    return str(payload.get("role", "")).lower() == "service_role"
+
+
+def validate_jwt(token: str) -> bool:
+    """Validate that a JWT string decodes cleanly into JSON header & payload (excluding public Supabase anon keys)."""
+    if is_supabase_anon_jwt(token):
+        return False
+    return _decode_jwt_parts(token) is not None
+
+
+def _validate_generic_jwt(token: str) -> bool:
+    """Match real non-public JWTs excluding Supabase service_role (handled with CRITICAL by OG-SEC-043)."""
+    if validate_supabase_service_role_jwt(token):
+        return False
+    return validate_jwt(token)
 
 
 def validate_chinese_id(id_str: str) -> bool:
@@ -106,7 +139,7 @@ def validate_luhn(digits_str: str) -> bool:
 
 
 def build_builtin_secret_rules() -> List[SecretRule]:
-    """Return the complete built-in set of 46 high-signal secret detection rules."""
+    """Return the complete built-in set of 54 high-signal secret detection rules."""
     return [
         # --- 1. Cloud Providers (9 rules) ---
         SecretRule(
@@ -226,12 +259,12 @@ def build_builtin_secret_rules() -> List[SecretRule]:
         ),
         SecretRule(
             rule_id="OG-SEC-012",
-            name="Anthropic Claude API Key",
-            pattern=re.compile(r"\b(sk-ant-(?:api03-)?[A-Za-z0-9\-_]{28,})\b"),
+            name="Anthropic Claude API / Admin / OAuth Key",
+            pattern=re.compile(r"\b(sk-ant-(?:api03|admin01|oat01|ort01)-?[A-Za-z0-9\-_]{24,}|sk-ant-[A-Za-z0-9\-_]{28,})\b"),
             severity=Severity.CRITICAL,
             category_tag="ai",
             min_entropy=3.6,
-            remediation="立即在 Anthropic Console 轮换该 API Key。",
+            remediation="立即在 Anthropic Console 轮换该 API / Admin / OAuth 凭据。",
         ),
         SecretRule(
             rule_id="OG-SEC-013",
@@ -262,10 +295,11 @@ def build_builtin_secret_rules() -> List[SecretRule]:
         ),
         SecretRule(
             rule_id="OG-SEC-016",
-            name="ModelScope / DashScope / Zhipu / Qianfan Contextual Key",
+            name="Domestic & Multi-Provider LLM Contextual Key",
             pattern=re.compile(
-                r"(?i)(?:dashscope|deepseek|zhipu|glm|qianfan|ernie|moonshot|kimi|baichuan|minimax|gemini|siliconflow)"
-                r"[A-Za-z0-9_]*?(?:api_?key|token|secret)\s*[:=]\s*[\"']([A-Za-z0-9.\-_]{20,90})[\"']"
+                r"(?i)(?:dashscope|deepseek|zhipu|glm|qianfan|ernie|moonshot|kimi|baichuan|minimax|gemini|siliconflow|"
+                r"volcengine|doubao|ark|hunyuan|stepfun|openrouter|mistral|cohere|perplexity)"
+                r"[A-Za-z0-9_]*?(?:api_?key|token|secret)\s*[:=]\s*[\"']([A-Za-z0-9.\-_]{20,96})[\"']"
             ),
             severity=Severity.CRITICAL,
             category_tag="ai",
@@ -432,7 +466,7 @@ def build_builtin_secret_rules() -> List[SecretRule]:
             severity=Severity.HIGH,
             category_tag="auth",
             min_entropy=3.8,
-            validator=validate_jwt,
+            validator=_validate_generic_jwt,
             remediation="避免在代码或测试用例中提交真实 JWT Token，改用运行时动态签发或 Mock 占位符。",
         ),
         SecretRule(
@@ -542,6 +576,80 @@ def build_builtin_secret_rules() -> List[SecretRule]:
             category_tag="cloud",
             min_entropy=3.7,
             remediation="立即在邮件服务后台撤销该 SendGrid API Key。",
+        ),
+        # --- 5b. 2025-2026 Modern AI Gateway, Agent & Serverless Cloud Tokens (8 rules) ---
+        SecretRule(
+            rule_id="OG-SEC-043",
+            name="Supabase Privileged service_role Admin JWT",
+            pattern=re.compile(r"\b(eyJ[A-Za-z0-9_-]{8,}\.eyJ[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,})\b"),
+            severity=Severity.CRITICAL,
+            category_tag="cloud",
+            min_entropy=3.8,
+            validator=validate_supabase_service_role_jwt,
+            remediation="立即在 Supabase Dashboard 重置 JWT Secret 并移除前端/仓库中的 service_role 密钥（客户端仅允许使用公开 anon key）。",
+        ),
+        SecretRule(
+            rule_id="OG-SEC-044",
+            name="Supabase Secret Key / Personal Access Token",
+            pattern=re.compile(r"\b((?:sb_secret_[A-Za-z0-9\-_]{24,}|sbp_[a-f0-9]{40}))\b"),
+            severity=Severity.CRITICAL,
+            category_tag="cloud",
+            min_entropy=3.4,
+            remediation="立即在 Supabase Account/Project Settings 撤销该 Secret Key 或 PAT，改用服务端环境变量注入。",
+        ),
+        SecretRule(
+            rule_id="OG-SEC-045",
+            name="OpenRouter Unified LLM API Key",
+            pattern=re.compile(r"\b(sk-or-v1-[0-9a-fA-F]{48,80})\b"),
+            severity=Severity.CRITICAL,
+            category_tag="ai",
+            min_entropy=3.4,
+            remediation="立即在 OpenRouter Keys 页面吊销该路由密钥，防止额度被盗刷。",
+        ),
+        SecretRule(
+            rule_id="OG-SEC-046",
+            name="xAI (Grok) API Key",
+            pattern=re.compile(r"\b(xai-[A-Za-z0-9]{48,96})\b"),
+            severity=Severity.CRITICAL,
+            category_tag="ai",
+            min_entropy=3.6,
+            remediation="立即在 xAI Console 删除并轮换该 API Key。",
+        ),
+        SecretRule(
+            rule_id="OG-SEC-047",
+            name="Perplexity AI API Key",
+            pattern=re.compile(r"\b(pplx-[A-Za-z0-9]{40,64})\b"),
+            severity=Severity.HIGH,
+            category_tag="ai",
+            min_entropy=3.6,
+            remediation="立即在 Perplexity API 设置页撤销该 API Key。",
+        ),
+        SecretRule(
+            rule_id="OG-SEC-048",
+            name="Vercel Blob Read-Write Token",
+            pattern=re.compile(r"\b(vercel_blob_rw_[A-Za-z0-9_]{20,})\b"),
+            severity=Severity.CRITICAL,
+            category_tag="cloud",
+            min_entropy=3.4,
+            remediation="立即在 Vercel Storage Console 轮换 Blob Read-Write Token，禁止提交至代码库。",
+        ),
+        SecretRule(
+            rule_id="OG-SEC-049",
+            name="LangSmith / LangChain Tracing API Key",
+            pattern=re.compile(r"\b(lsv2_(?:pt|sk)_[A-Za-z0-9_]{32,})\b"),
+            severity=Severity.HIGH,
+            category_tag="ai",
+            min_entropy=3.4,
+            remediation="立即在 LangSmith Settings 撤销该追踪密钥并通过 `LANGCHAIN_API_KEY` 注入。",
+        ),
+        SecretRule(
+            rule_id="OG-SEC-050",
+            name="Linear Personal API Key",
+            pattern=re.compile(r"\b(lin_api_[A-Za-z0-9]{36,})\b"),
+            severity=Severity.HIGH,
+            category_tag="scm",
+            min_entropy=3.5,
+            remediation="立即在 Linear Security & Access 页面吊销该 Personal API Key。",
         ),
         # --- 6. PII & Campus/Enterprise Sensitive Data (4 rules) ---
         SecretRule(

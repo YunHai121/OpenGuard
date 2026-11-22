@@ -79,7 +79,9 @@ class TestLockfileIntegrityAndConcurrentScan(unittest.TestCase):
             self.assertEqual(len(par_sast), 2)
 
     def test_v130_metadata_and_openssf_hygiene_files_present(self) -> None:
-        self.assertEqual(__version__, "1.3.0")
+        from packaging.version import Version
+
+        self.assertGreaterEqual(Version(__version__), Version("1.3.0"))
         repo_root = Path(__file__).resolve().parents[1]
         self.assertTrue((repo_root / ".github" / "dependabot.yml").is_file())
         self.assertTrue((repo_root / ".github" / "CODEOWNERS").is_file())

@@ -292,3 +292,24 @@
 - `node --check openguard/web/static/app.js` 语法零错误；
 - 新增 `tests/test_v22_mcp_posture_and_web_sbom_quality.py`（2 项端到端测试），全量单测增至 **103 / 103 通过**；
 - 自身审计：**100.0/100 (A+)**，**Quality Gate: PASSED**。
+
+---
+
+## Round #13 (`v1.4.0` 里程碑) — 2026-11-22 08:28–08:36
+
+### 本轮重点对标产品与行业动态
+- **GitHub Secret Scanning / TruffleHog / Gitleaks / MongoDB Kingfisher / GitGuardian (2025–2026)**：随着 AI 辅助编程（Claude Code / Cursor / Copilot）普及，开发者仓库中的 AI 网关与 Serverless 凭据泄露激增（Anthropic Admin/OAuth Token、OpenRouter `sk-or-v1-*`、xAI Grok `xai-*`、Perplexity `pplx-*`、LangSmith `lsv2_*`、Vercel Blob `vercel_blob_rw_*`、Supabase `sb_secret_*`/`sbp_*`、Linear `lin_api_*`）。
+- **高精度语义降噪（Supabase JWT `anon` vs `service_role`）**：GitGuardian 与 TruffleHog 的关键降噪实践之一是解码 JWT 载荷——将前端公开设计的 Supabase `anon` Key 静默剔除，避免客户端代码误报，同时把具有全库超级权限的 `service_role` JWT 升级为独立 `CRITICAL` 告警。
+- **里程碑发版梳理**：自 `v1.3.0` 起已连续完成 6 轮深度演进（JS 污点分析、SHA-256 增量缓存、7 语言 SAST、多仓 `batch`、SBOM Diff & NTIA 质量评分、2025–2026 高危 CVE、`init`/`doctor`/`--json`/`--audit-mode`、6 工具 MCP、Web Doctor/NTIA 面板与 54 条 AI/云凭据规则），具备发布 **`v1.4.0`** 里程碑的完整条件。
+
+### 核心发现与已落地改进
+1. **54 条现代 AI & 云凭据规则库与 Supabase JWT 角色智能判别（`openguard/scanners/secret_rules.py`）**：
+   - 规则总数从 46 条扩容至 **54 条**：新增 `OG-SEC-043`（Supabase `service_role` 特权 JWT，`CRITICAL`）、`OG-SEC-044`（Supabase `sb_secret_`/`sbp_`）、`OG-SEC-045`（OpenRouter）、`OG-SEC-046`（xAI Grok）、`OG-SEC-047`（Perplexity）、`OG-SEC-048`（Vercel Blob）、`OG-SEC-049`（LangSmith）、`OG-SEC-050`（Linear）；
+   - 升级 `OG-SEC-012` 覆盖 Anthropic `api03`/`admin01`/`oat01`/`ort01`，扩展 `OG-SEC-016` 覆盖豆包/火山方舟 Ark/混元/阶跃星辰/OpenRouter/Mistral/Cohere/Perplexity；
+   - 实现 `is_supabase_anon_jwt` 与 `validate_supabase_service_role_jwt`，对客户端公开 `anon` JWT 零误报抑制、对 `service_role` JWT 精准升危至 `CRITICAL` 且不重复触发 `OG-SEC-032`。
+2. **`v1.4.0` 里程碑发版与 `README.md` / `CHANGELOG.md` 全面刷新**：
+   - 更新 `openguard/__init__.py`、`pyproject.toml` 至 `1.4.0` 并重装可编辑包；刷新 `README.md` 亮点、架构 Mermaid 图与快速上手命令。
+
+### 验证结果
+- 新增 `tests/test_v23_ai_cloud_secrets_and_supabase_jwt.py`（3 项专项测试，全程动态构造测试 Token 杜绝静态泄露误触发），全量单测增至 **106 / 106 通过**；
+- 自身审计：**100.0/100 (A+)**，**Quality Gate: PASSED**；打标 `v1.4.0` 并双仓同步。
