@@ -159,13 +159,13 @@ auditor.export_report(report, "pdf", "audit_report.pdf")
 
 ## 可复现性能与准确率对比实验
 
-在 220 条标注样本基准测试集（100 条真实高危密钥 + 120 条占位符/UUID/SHA256/AST 文档字符串/正则定义等高干扰误报诱饵）上执行 `python benchmarks/run_benchmark.py` 的实测结果如下：
+在 260 条标注样本基准测试集（120 条真实高危密钥含 CRC32 GitHub PAT / OpenRouter / xAI / Supabase `service_role` JWT + 140 条占位符/UUID/SHA256/AST 文档字符串/正则定义/Supabase 公开 `anon` JWT/CRC32 伪造单测 Token 等误报诱饵）上执行 `python benchmarks/run_benchmark.py` 的实测结果如下：
 
 | 检测引擎 | Precision | Recall | F1-Score | 误报率 (FPR) | 耗时 (ms) |
 | :--- | :---: | :---: | :---: | :---: | :---: |
-| Baseline-A: Pure Regex | 0.5714 | 1.0000 | 0.7273 | 0.6250 | 18.71 |
-| Baseline-B: Pure Shannon Entropy | 0.4511 | 0.6000 | 0.5150 | 0.6083 | 3.64 |
-| **OpenGuard: 3-Stage Hybrid (Regex + Entropy + AST)** | **1.0000** | **1.0000** | **1.0000** | **0.0000** | 36.13 |
+| Baseline-A: Pure Regex | 0.5581 | 1.0000 | 0.7164 | 0.6786 | 31.59 |
+| Baseline-B: Pure Shannon Entropy | 0.4625 | 0.6167 | 0.5286 | 0.6143 | 4.40 |
+| **OpenGuard: 3-Stage Hybrid (Regex + Entropy + AST + CRC32)** | **1.0000** | **1.0000** | **1.0000** | **0.0000** | 54.54 |
 
 > 相比纯正则基线，OpenGuard 三阶混合引擎将测试集误报率降低了 **100.0%**，同时保持 **100.0%** 召回率。完整测试报告见 [benchmarks/BENCHMARK_REPORT.md](benchmarks/BENCHMARK_REPORT.md)。
 

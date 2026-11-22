@@ -266,7 +266,8 @@ def autofix(
     target: Path = typer.Argument(..., help="目标开源仓库目录"),
     secrets: bool = typer.Option(False, "--secrets", help="自动剥离硬编码密钥为环境变量并生成 .env.example"),
     docs: bool = typer.Option(False, "--docs", help="一键补齐缺失的标准开源规范文档与 .gitignore"),
-    deps: bool = typer.Option(False, "--deps", help="自动将存在已知 CVE 的依赖升级至最小安全版本"),
+    deps: bool = typer.Option(False, "--deps", help="自动将存在已知 CVE 的依赖升级至最小安全版本（支持 PyPI/npm/Go/Cargo/Maven）"),
+    no_major: bool = typer.Option(False, "--no-major", help="跳过跨主版本破坏性依赖升级（类似 Renovate major=false 保护）"),
     license_id: str = typer.Option("MIT", "--license", help="生成的许可证模板类型: MIT|Apache-2.0|MulanPSL-2.0"),
     apply: bool = typer.Option(False, "--apply", help="真正写入修改（默认仅 dry-run 预览 diff）"),
     force: bool = typer.Option(False, "--force", help="文档生成时强制覆盖已有文件"),
@@ -297,14 +298,18 @@ def autofix(
     if deps:
         if cached_report is None:
             cached_report = auditor.audit(root)
-        dep_res = DependencyRemediator().remediate(root, cached_report, apply=apply)
+        dep_res = DependencyRemediator().remediate(root, cached_report, apply=apply, allow_major=not no_major)
         console.print(
             Panel(
                 f"模式: {'[red]实际写入 (已备份至 .openguard_backup)[/red]' if apply else '[yellow]Dry-Run 预览[/yellow]'}\n"
-                f"涉及清单: {dep_res.files_modified} 个 | 升级组件: {dep_res.packages_upgraded} 项",
-                title="漏洞依赖安全自动升级",
+                f"涉及清单: {dep_res.files_modified} 个 | 升级组件: {dep_res.packages_upgraded} 项 | 跨主版本警告: {len(dep_res.breaking_warnings)} 项",
+                title="多生态漏洞依赖安全自动升级 (PyPI/npm/Go/Cargo/Maven)",
             )
         )
+        for warn in dep_res.breaking_warnings:
+            console.print(f"[bold yellow]⚠ {warn}[/bold yellow]")
+        for skipped in dep_res.skipped_breaking:
+            console.print(f"[dim]↷ 已跳过 (--no-major): {skipped}[/dim]")
         for preview in dep_res.previews:
             console.print(f"\n[bold cyan]>>> {preview.file_path}[/bold cyan] ({', '.join(preview.upgraded_packages)})")
             console.print(preview.unified_diff or "(无文本差异)")

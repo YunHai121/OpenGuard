@@ -337,3 +337,23 @@
 ### 验证结果
 - 新增 `tests/test_v24_supply_chain_worms_and_ci_compromise.py`（4 项专项测试），全量单测增至 **110 / 110 通过**；
 - 自身审计：**100.0/100 (A+)**，**Quality Gate: PASSED**。
+
+---
+
+## Round #15 — 2026-11-22 10:28–10:35
+
+### 本轮重点对标产品与行业动态
+- **Google OSV-Scanner V2 Guided Remediation (`osv-scanner fix`) & Renovate 依赖自动修复**：多语言供应链修复最大的落地阻力在于（1）覆盖生态过窄（仅支持 Python/npm 而忽略 Go/Rust/Java），以及（2）当某个 CVE 的最小安全版本跨越主版本边界（Breaking Major，如 `5.x -> 6.x`、Cargo `0.x -> 0.y` 或 Go v2+ import 路径变化）时，盲目升级极易导致构建破坏；业界标杆做法是明确标出 `[BREAKING MAJOR]` 告警并提供 `--no-major` 安全保护开关。
+- **SecretBench / TruffleHog / GitGuardian 现代凭据评测基准**：最新基准评测重点考察扫描器面对“高仿真实形态诱饵”的区分能力——特别是 BaaS 公开客户端 **Supabase `anon` JWT** vs 致命后端 `service_role` JWT，以及单测中未通过 Base62 CRC32 校验的伪造 `ghp_` Token。
+
+### 核心发现与已落地改进
+1. **6 生态漏洞依赖安全自动升级与跨主版本保护（`openguard/remediation/dep_remediator.py` + `openguard/cli.py`）**：
+   - 将 `openguard autofix --deps` 支持清单从 3 种扩展至 **6 种**：在原有 `requirements*.txt`、`pyproject.toml`、`package.json` 基础上，新增 **`go.mod`**（保留 `// indirect` 注释与 v2+ import 路径风险提示）、**`Cargo.toml`**（同时支持简写与 `{ version = "...", features = [...] }` 内联表）及 **`pom.xml`**（精准定位 `<dependency>` 块内 `<version>`）；
+   - 新增 SemVer 跨主版本破坏性变更探测（`breaking_warnings`）与 `--no-major`（`allow_major=False`）护栏，支持仅自动合入 patch/minor 安全补丁并清晰汇总跳过的破坏性大版本升级。
+2. **基准评测语料扩容至 260 条并重新实测（`benchmarks/corpus_generator.py` + `benchmarks/BENCHMARK_REPORT.md` + `README.md`）**：
+   - 将基准测试集从 220 条扩容至 **260 条（120 正例 + 140 负例诱饵）**：新增 10 条 2025–2026 AI 网关密钥（OpenRouter/xAI）、10 条 Supabase `service_role` JWT、10 条客户端公开 Supabase `anon` JWT 诱饵、10 条单测中 CRC32 校验失败的伪造 `ghp_` Token，并将正例 `ghp_` 升级为真 Base62 CRC32 签名；
+   - 实测结果：Pure Regex FPR 升至 **67.86%**（F1 `0.7164`），OpenGuard 三阶混合引擎仍保持 **Precision 1.0000 / Recall 1.0000 / F1 1.0000 / FPR 0.0000**（`54.54 ms`）。
+
+### 验证结果
+- 新增 `tests/test_v25_multi_eco_remediation_and_benchmark.py`（3 项专项测试），全量单测增至 **113 / 113 通过**；
+- 自身审计：**100.0/100 (A+)**，**Quality Gate: PASSED**。

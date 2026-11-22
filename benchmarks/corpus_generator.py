@@ -2,10 +2,31 @@
 
 from __future__ import annotations
 
+import base64
 import hashlib
+import json
 import random
+import zlib
 from dataclasses import dataclass
 from typing import List
+
+from openguard.scanners.secret_rules import _to_base62
+
+
+def _make_crc32_ghp(rng: random.Random, alphabet: str) -> str:
+    body = "".join(rng.choice(alphabet) for _ in range(30))
+    crc = zlib.crc32(body.encode("ascii")) & 0xFFFFFFFF
+    return f"ghp_{body}{_to_base62(crc, width=6)}"
+
+
+def _make_supabase_jwt(rng: random.Random, role: str, alphabet: str) -> str:
+    hdr = base64.urlsafe_b64encode(json.dumps({"alg": "HS256", "typ": "JWT"}).encode()).decode().rstrip("=")
+    ref = "".join(rng.choice("abcdefghijklmnopqrstuvwxyz0123456789") for _ in range(16))
+    pay = base64.urlsafe_b64encode(
+        json.dumps({"iss": "supabase", "ref": ref, "role": role, "iat": 1730000000}).encode()
+    ).decode().rstrip("=")
+    sig = "".join(rng.choice(alphabet) for _ in range(32))
+    return f"{hdr}.{pay}.{sig}"
 
 
 @dataclass
@@ -44,7 +65,7 @@ def _make_invalid_chinese_id(rng: random.Random) -> str:
 
 
 def generate_benchmark_corpus(seed: int = 20261120) -> List[LabeledSample]:
-    """Generate 220 deterministic labeled samples (100 true positives + 120 realistic false-positive traps)."""
+    """Generate 260 deterministic labeled samples (120 true positives + 140 realistic false-positive traps)."""
     rng = random.Random(seed)
     alnum = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789"
     upper_alnum = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"
@@ -69,8 +90,8 @@ def generate_benchmark_corpus(seed: int = 20261120) -> List[LabeledSample]:
         samples.append(LabeledSample(f"TP-ANT-{i}", "ai_anthropic", "llm/claude.py", f'ANTHROPIC_KEY = "{tok}"', True, "Anthropic key"))
 
     for i in range(10):
-        tok = "ghp_" + _rand_token(rng, 36, alnum)
-        samples.append(LabeledSample(f"TP-GH-{i}", "scm_github", "ci/deploy.py", f'GITHUB_TOKEN = "{tok}"', True, "GitHub PAT"))
+        tok = _make_crc32_ghp(rng, alnum)
+        samples.append(LabeledSample(f"TP-GH-{i}", "scm_github", "ci/deploy.py", f'GITHUB_TOKEN = "{tok}"', True, "CRC32-valid GitHub PAT"))
 
     for i in range(10):
         tok = "glpat-" + _rand_token(rng, 22, alnum)
@@ -92,7 +113,19 @@ def generate_benchmark_corpus(seed: int = 20261120) -> List[LabeledSample]:
         pwd = _rand_token(rng, 16, alnum + "!@#")
         samples.append(LabeledSample(f"TP-PWD-{i}", "hardcoded_pwd", "auth/admin.py", f'ADMIN_PASSWORD = "{pwd}"', True, "Hardcoded admin password"))
 
-    # --- 120 True Negative (Realistic False-Positive Traps) ---
+    for i in range(10):
+        if i % 2 == 0:
+            tok = "sk-or-v1-" + _rand_token(rng, 64, hex_chars)
+            samples.append(LabeledSample(f"TP-AI26-{i}", "ai_openrouter", "llm/router.py", f'OPENROUTER_API_KEY = "{tok}"', True, "OpenRouter LLM gateway key"))
+        else:
+            tok = "xai-" + _rand_token(rng, 56, alnum)
+            samples.append(LabeledSample(f"TP-AI26-{i}", "ai_xai", "llm/grok.py", f'XAI_API_KEY = "{tok}"', True, "xAI Grok API key"))
+
+    for i in range(10):
+        jwt_svc = _make_supabase_jwt(rng, "service_role", alnum)
+        samples.append(LabeledSample(f"TP-SB-SVC-{i}", "cloud_supabase_service", "backend/db.ts", f'const SUPABASE_SERVICE_KEY = "{jwt_svc}";', True, "Supabase privileged service_role JWT"))
+
+    # --- 140 True Negative (Realistic False-Positive Traps) ---
     for i in range(15):
         ph = rng.choice([
             "sk-your_example_api_key_placeholder",
@@ -129,5 +162,14 @@ def generate_benchmark_corpus(seed: int = 20261120) -> List[LabeledSample]:
     for i in range(15):
         tok = "sk-proj-" + _rand_token(rng, 40, alnum)
         samples.append(LabeledSample(f"TN-IGN-{i}", "fp_inline_ignore", "src/mock.py", f'DEMO_KEY = "{tok}"  # openguard: ignore', False, "Inline suppression comment"))
+
+    for i in range(10):
+        jwt_anon = _make_supabase_jwt(rng, "anon", alnum)
+        samples.append(LabeledSample(f"TN-SB-ANON-{i}", "fp_supabase_anon", "web/client.ts", f'const SUPABASE_ANON_KEY = "{jwt_anon}";', False, "Public client-side Supabase anon JWT"))
+
+    for i in range(10):
+        # CRC32-invalid mock token inside unit test file (caught by offline CRC32 + test context)
+        bad_ghp = "ghp_" + _rand_token(rng, 30, alnum) + "000000"
+        samples.append(LabeledSample(f"TN-CRC-MOCK-{i}", "fp_crc32_mock", "tests/test_github_mock.py", f'def test_auth():\n    token = "{bad_ghp}"\n    return token', False, "CRC32-invalid mock GitHub PAT in test"))
 
     return samples

@@ -1,21 +1,21 @@
 {
-  "corpus_size": 220,
-  "true_positives_count": 100,
-  "true_negatives_count": 120,
+  "corpus_size": 260,
+  "true_positives_count": 120,
+  "true_negatives_count": 140,
   "summary_table": [
     {
       "engine": "Baseline-A: Pure Regex",
-      "samples": 220,
-      "tp": 100,
-      "fp": 75,
+      "samples": 260,
+      "tp": 120,
+      "fp": 95,
       "fn": 0,
       "tn": 45,
-      "precision": 0.5714,
+      "precision": 0.5581,
       "recall": 1.0,
-      "f1_score": 0.7273,
-      "false_positive_rate": 0.625,
-      "latency_ms": 18.75,
-      "throughput_loc_per_sec": 16535.3,
+      "f1_score": 0.7164,
+      "false_positive_rate": 0.6786,
+      "latency_ms": 31.59,
+      "throughput_loc_per_sec": 11713.3,
       "misclassified_samples": [
         {
           "id": "TN-PH-0",
@@ -71,17 +71,17 @@
     },
     {
       "engine": "Baseline-B: Pure Shannon Entropy",
-      "samples": 220,
-      "tp": 60,
-      "fp": 73,
-      "fn": 40,
-      "tn": 47,
-      "precision": 0.4511,
-      "recall": 0.6,
-      "f1_score": 0.515,
-      "false_positive_rate": 0.6083,
-      "latency_ms": 3.61,
-      "throughput_loc_per_sec": 85753.8,
+      "samples": 260,
+      "tp": 74,
+      "fp": 86,
+      "fn": 46,
+      "tn": 54,
+      "precision": 0.4625,
+      "recall": 0.6167,
+      "f1_score": 0.5286,
+      "false_positive_rate": 0.6143,
+      "latency_ms": 4.4,
+      "throughput_loc_per_sec": 84171.3,
       "misclassified_samples": [
         {
           "id": "TP-AWS-1",
@@ -137,17 +137,17 @@
     },
     {
       "engine": "OpenGuard: 3-Stage Hybrid (Regex + Entropy + AST)",
-      "samples": 220,
-      "tp": 100,
+      "samples": 260,
+      "tp": 120,
       "fp": 0,
       "fn": 0,
-      "tn": 120,
+      "tn": 140,
       "precision": 1.0,
       "recall": 1.0,
       "f1_score": 1.0,
       "false_positive_rate": 0.0,
-      "latency_ms": 34.61,
-      "throughput_loc_per_sec": 8957.3,
+      "latency_ms": 54.54,
+      "throughput_loc_per_sec": 6784.5,
       "misclassified_samples": []
     }
   ],
@@ -161,7 +161,7 @@
       "npm"
     ],
     "license_conflicts_detected": 3,
-    "vulnerabilities_and_typosquats_detected": 12,
-    "elapsed_ms": 414.92
+    "vulnerabilities_and_typosquats_detected": 14,
+    "elapsed_ms": 417.85
   }
 }
