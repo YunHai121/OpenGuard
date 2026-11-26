@@ -38,6 +38,7 @@
             <a id="exp-pdf" target="_blank">中文 PDF 审计报告</a>
             <a id="exp-sarif" target="_blank">SARIF 2.1.0 (IDE/CI)</a>
             <a id="exp-cdx" target="_blank">CycloneDX 1.5 SBOM (含 VEX)</a>
+            <a id="exp-aibom" target="_blank">CycloneDX 1.6 AIBOM (ML-BOM)</a>
             <a id="exp-spdx" target="_blank">SPDX 2.3 SBOM</a>
             <a id="exp-slsa" target="_blank">SLSA v1.0 完整度证明</a>
             <a id="exp-compliance" target="_blank">EU CRA / NIST SSDF 合规报告 (JSON)</a>
@@ -164,6 +165,15 @@
             <span id="compliance-posture-summary" class="mono muted-xs">等待扫描</span>
           </div>
           <div id="compliance-posture-container" class="muted-xs">运行审计后自动映射 8 项欧盟 CRA、NIST SSDF 与 OWASP SCVS 合规控制项。</div>
+        </div>
+
+        <!-- CycloneDX 1.6 AIBOM / ML-BOM -->
+        <div class="card">
+          <div class="card-head">
+            <h2 class="card-title">AI 物料清单与模型资产台账 (CycloneDX 1.6 AIBOM)</h2>
+            <span id="aibom-posture-summary" class="mono muted-xs">等待扫描</span>
+          </div>
+          <div id="aibom-posture-container" class="muted-xs">运行审计后自动发现本地模型权重、HuggingFace 模型/数据集与托管 LLM API。</div>
         </div>
       </div>
     </section>

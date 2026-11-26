@@ -446,3 +446,16 @@
 ### 验证结果
 - 新增 `tests/test_v29_reliability_compat_and_ci.py`（5 项回归测试），全量单测增至 **126 / 126 通过**；
 - `node --check openguard/web/static/app.js`、`openguard scan . --offline --fail-on high`（**100.0/100 (A+)**, **Quality Gate: PASSED**）、`openguard compliance . --offline --fail-on-noncompliant`（**8/8 COMPLIANT**）、`openguard doctor .` 全部通过。
+
+---
+
+## Round #20 — 2026-11-26 21:28–21:35
+
+### 本轮重点（零 Bug 深度排查 + AI 供应链防线与 Web AIBOM 闭环）
+1. **ML Pickle 反汇编器备忘录混淆盲区修复 (`ml_model_scanner.py`)**：发现 `inspect_pickle_bytes()` 此前仅维护 `str_stack`，未跟踪 Pickle Protocol 4/5 的 `MEMOIZE`/`PUT`/`BINPUT` 与 `GET`/`BINGET` 备忘录指令，导致攻击者将模块名存入备忘录再 `BINGET` + `STACK_GLOBAL` 时会漏报；现已补全备忘录寄存器追踪及 `marshal.loads` / `types.FunctionType` 高危原语。
+2. **`aibom.py` `*.bin` 排除冲突修复**：`DEFAULT_EXCLUDE_PATTERNS` 中的 `*.bin` 会导致 `discover_ai_assets()` 跳过 `pytorch_model.bin`；现已与 `MLModelScanner` 对齐，自动放行并基于文件头/命名识别 PyTorch/Pickle `.bin` 权重，并新增 xAI `grok-*` 模型识别。
+3. **Web 工作台 CycloneDX 1.6 AIBOM 闭环（`web/app.py` + `index.html` + `app.js`）**：新增 `GET /api/export/{scan_id}/aibom` 导出端点、导出菜单 `CycloneDX 1.6 AIBOM (ML-BOM)` 入口，以及总览页实时 AIBOM 模型/数据集台账面板。
+
+### 验证结果
+- 新增 `tests/test_v30_aibom_pickle_memo_and_web.py`（3 项回归测试），全量单测增至 **129 / 129 通过**；
+- `node --check openguard/web/static/app.js`、自身审计 **100.0/100 (A+)**（**Quality Gate: PASSED**）、`openguard compliance . --offline --fail-on-noncompliant`（**8/8 COMPLIANT**）与 `openguard doctor .` 全部通过。

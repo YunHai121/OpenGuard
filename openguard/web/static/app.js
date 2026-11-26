@@ -282,6 +282,7 @@ function renderReport(report) {
   $('exp-pdf').href = `/api/export/${sid}/pdf`;
   $('exp-sarif').href = `/api/export/${sid}/sarif`;
   $('exp-cdx').href = `/api/export/${sid}/cyclonedx`;
+  if ($('exp-aibom')) $('exp-aibom').href = `/api/export/${sid}/aibom`;
   $('exp-spdx').href = `/api/export/${sid}/spdx`;
   if ($('exp-slsa')) $('exp-slsa').href = `/api/export/${sid}/slsa`;
   if ($('exp-compliance')) $('exp-compliance').href = `/api/export/${sid}/compliance`;
@@ -296,6 +297,57 @@ function renderReport(report) {
   loadDoctorPosture(report);
   loadSbomQuality(report.scan_id);
   loadCompliancePosture(report.scan_id);
+  loadAibomPosture(report);
+}
+
+async function loadAibomPosture(report) {
+  const box = $('aibom-posture-container');
+  const badge = $('aibom-posture-summary');
+  if (!box || !badge) return;
+  if (!report || !report.target_path || /^https?:\/\//i.test(report.target_path) || report.target_path.startsWith('git@')) {
+    badge.textContent = '仅本地仓库可用';
+    box.textContent = '远程 Git 仓库扫描已清理临时目录，请在本地目录或导出菜单中使用 AIBOM。';
+    return;
+  }
+  badge.textContent = '发现中...';
+  try {
+    const resp = await fetch(`/api/aibom?target=${encodeURIComponent(report.target_path)}`);
+    if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+    const data = await resp.json();
+    const comps = (data.cyclonedx_aibom && data.cyclonedx_aibom.components) || [];
+    badge.textContent = `模型 ${Number(data.model_count)} · 数据集 ${Number(data.dataset_count)}`;
+    if (!comps.length) {
+      mountEscapedHtml(box, '<div class="muted-xs">未在当前仓库发现本地模型权重、HuggingFace 模型/数据集或托管 LLM API 引用。</div>');
+      return;
+    }
+    const rows = comps
+      .slice(0, 20)
+      .map((c) => {
+        const props = {};
+        (c.properties || []).forEach((p) => {
+          props[p.name] = p.value;
+        });
+        const safeExec = props['openguard:format_execution_safe'];
+        const pinned = props['openguard:version_pinned'] === 'true';
+        const statusText = safeExec === 'false' ? 'Pickle 风险' : safeExec === 'true' ? '安全格式' : pinned ? '已锁版本' : '未锁 revision';
+        const cls = safeExec === 'false' ? 'badge-crit' : safeExec === 'true' || pinned ? 'badge-low' : 'badge-med';
+        return `<tr>
+          <td><strong>${esc(c.name)}</strong></td>
+          <td class="mono muted-xs">${esc(props['openguard:format'] || c.type)}</td>
+          <td>${esc((c.supplier && c.supplier.name) || '-')}</td>
+          <td class="mono muted-xs">${esc(props['openguard:source_file'] || '-')}</td>
+          <td><span class="badge ${cls}">${esc(statusText)}</span></td>
+        </tr>`;
+      })
+      .join('');
+    mountEscapedHtml(
+      box,
+      `<table class="data-table"><thead><tr><th>AI 资产</th><th>格式/来源</th><th>提供方</th><th>位置</th><th>安全/锁定状态</th></tr></thead><tbody>${rows}</tbody></table>`
+    );
+  } catch (err) {
+    badge.textContent = '不可用';
+    mountEscapedHtml(box, `<div class="muted-xs">无法加载 AIBOM：${esc(err.message)}</div>`);
+  }
 }
 
 async function loadCompliancePosture(scanId) {

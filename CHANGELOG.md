@@ -5,6 +5,9 @@ All notable changes to **OpenGuard (开源卫士)** are documented in this file 
 ## [Unreleased]
 
 ### Fixed & Hardened
+- **ML Pickle 反序列化与 AIBOM 覆盖盲区修复（Round #20）**：
+  - 修复 `MLModelScanner.inspect_pickle_bytes()` 未追踪 `MEMOIZE`/`BINPUT`/`BINGET` 备忘录操作码导致协议 4/5 备忘录混淆 `STACK_GLOBAL` 绕过的问题，并补充 `marshal.loads` / `types.FunctionType` 高危原语；
+  - 修复 `aibom.py` 受默认 `*.bin` 排除规则影响跳过 `pytorch_model.bin` 等 PyTorch 二进制权重的问题，新增 PyTorch/Pickle `.bin` 头识别与 `grok-*` 模型支持。
 - **跨 Python 版本（3.10–3.14）与校内 GitLab CI（`git.hust.edu.cn`）稳定性加固**：
   - 修复 `load_config()` / `load_ignore_patterns()` 传入 `str` 路径时报 `TypeError` 的边界缺陷；
   - 修复 `OpenGuardAuditor._audit_remote_repo()` 临时目录清理使用 Python 3.12 专属 `shutil.rmtree(..., onexc=...)` 导致 Python 3.11 CI 报错的兼容问题，改为 `_safe_rmtree()` 跨版本兼容；
@@ -14,6 +17,7 @@ All notable changes to **OpenGuard (开源卫士)** are documented in this file 
   - 清理 `requirements.txt` 中未使用的 `python-docx` 依赖以加速 `git.hust.edu.cn` `python:3.11-slim` CI 构建，升级 `.gitlab-ci.yml` 增加合规与态势体检门禁，并修复 `HookInstaller` 生成的 GitHub Actions 模板 40 位 SHA 锁定与 pre-commit 提示参数错误（移除不存在的 `--dry-run`）。
 
 ### Added
+- **Web 工作台 AIBOM 资产台账与导出对齐（Round #20）**：Web 总览页新增 **CycloneDX 1.6 AIBOM 资产台账面板**，导出菜单与后端同步新增 `/api/export/{scan_id}/aibom`；
 - **Web 工作台与导出接口对齐**：Web 导出菜单新增 `SLSA v1.0 完整度证明` 与 `EU CRA / NIST SSDF 合规报告 (JSON)`（`/api/export/{scan_id}/compliance`），`AutofixRequest` 支持 `allow_major` 开关并返回 `breaking_warnings`/`skipped_breaking`，修复版本徽章动态同步与 `OG-ML-`/`OG-HYG-`/`OG-TAINT-` 分类标签映射。
 - **CycloneDX 1.6 AI 物料清单 (AIBOM / ML-BOM) 静态发现引擎 (`aibom.py` + `openguard aibom` + `/api/aibom`)**：对标 OWASP CycloneDX 1.6 与 `cdxgen aibom`，零执行静态发现仓库内 SafeTensors/GGUF/ONNX/PyTorch 本地模型权重（带 SHA-256 摘要与安全格式标识）、HuggingFace 模型/数据集调用（含 `revision` 锁定检查）与主流 LLM API 调用，输出标准 CycloneDX 1.6 ML-BOM JSON（含 `modelCard`）。
 - **Web 工作台国际合规映射面板 (`index.html` + `app.js`)**：在总览页自动展示 EU CRA / NIST SSDF / OWASP SCVS 8 项合规控制项达标率与证据。

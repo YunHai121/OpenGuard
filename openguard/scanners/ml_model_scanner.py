@@ -59,6 +59,8 @@ DANGEROUS_CALLABLES = frozenset({
     ("requests", "post"),
     ("operator", "attrgetter"),
     ("ctypes", "CDLL"),
+    ("marshal", "loads"),
+    ("types", "FunctionType"),
     ("sys", "exit"),
 })
 
@@ -107,6 +109,8 @@ def inspect_pickle_bytes(data: bytes) -> List[str]:
     dangerous_hits: List[str] = []
     seen: Set[str] = set()
     str_stack: List[str] = []
+    memo: dict[int, str] = {}
+    memo_idx = 0
 
     try:
         for opcode, arg, _pos in pickletools.genops(data):
@@ -114,6 +118,15 @@ def inspect_pickle_bytes(data: bytes) -> List[str]:
             if opname in _STRING_PUSH_OPCODES and isinstance(arg, (str, bytes)):
                 val = arg.decode("utf-8", errors="replace") if isinstance(arg, bytes) else arg
                 str_stack.append(val)
+                if len(str_stack) > 64:
+                    str_stack = str_stack[-32:]
+            elif opname == "MEMOIZE" and str_stack:
+                memo[memo_idx] = str_stack[-1]
+                memo_idx += 1
+            elif opname in ("PUT", "BINPUT", "LONG_BINPUT") and isinstance(arg, int) and str_stack:
+                memo[arg] = str_stack[-1]
+            elif opname in ("GET", "BINGET", "LONG_BINGET") and isinstance(arg, int) and arg in memo:
+                str_stack.append(memo[arg])
                 if len(str_stack) > 64:
                     str_stack = str_stack[-32:]
             elif opname in ("GLOBAL", "INST") and isinstance(arg, str):

@@ -45,7 +45,7 @@ LLM_MODEL_ID_RE = re.compile(
     r"^(?:gpt-[345][a-z0-9.\-]*|o[134](?:-[a-z0-9.\-]+)?|claude-(?:[234]|sonnet|opus|haiku)[a-z0-9.\-]*|"
     r"gemini-[123][a-z0-9.\-]*|deepseek-[a-z0-9.\-]+|qwen[0-9.\-]*-[a-z0-9.\-]+|"
     r"glm-[345][a-z0-9.\-]*|moonshot-v[0-9a-z.\-]+|kimi-[a-z0-9.\-]+|doubao-[a-z0-9.\-]+|"
-    r"llama-[234][a-z0-9.\-]*|mistral-[a-z0-9.\-]+|command-r[a-z0-9.\-]*)$",
+    r"grok-[234][a-z0-9.\-]*|llama-[234][a-z0-9.\-]*|mistral-[a-z0-9.\-]+|command-r[a-z0-9.\-]*)$",
     re.I,
 )
 
@@ -71,6 +71,8 @@ def _infer_provider(model_id: str) -> str:
         return "Moonshot AI"
     if low.startswith("doubao-"):
         return "ByteDance (Volcengine)"
+    if low.startswith("grok-"):
+        return "xAI"
     if low.startswith("llama-"):
         return "Meta"
     if low.startswith("mistral-"):
@@ -248,7 +250,18 @@ def discover_ai_assets(root_path: Path, exclude_patterns: Optional[List[str]] = 
     root = Path(root_path).resolve()
     if root.is_file():
         root = root.parent
-    excludes = exclude_patterns or []
+    excludes = [p for p in (exclude_patterns or []) if p.lower() != "*.bin"]
+
+    def _is_pytorch_or_pickle_bin(path: Path) -> bool:
+        low_name = path.name.lower()
+        if low_name.startswith(("pytorch_model", "adapter_model", "model", "weights")):
+            return True
+        try:
+            with path.open("rb") as fh:
+                hdr = fh.read(4)
+            return hdr.startswith(b"PK\x03\x04") or (len(hdr) >= 2 and hdr[0] == 0x80 and hdr[1] in (2, 3, 4, 5))
+        except OSError:
+            return False
 
     assets: List[AIAsset] = []
     seen_keys: Set[Tuple[str, str, str]] = set()
@@ -274,8 +287,8 @@ def discover_ai_assets(root_path: Path, exclude_patterns: Optional[List[str]] = 
                 continue
             ext = fpath.suffix.lower()
 
-            if ext in MODEL_WEIGHT_FORMATS:
-                fmt_name, is_safe = MODEL_WEIGHT_FORMATS[ext]
+            if ext in MODEL_WEIGHT_FORMATS or (ext == ".bin" and _is_pytorch_or_pickle_bin(fpath)):
+                fmt_name, is_safe = MODEL_WEIGHT_FORMATS.get(ext, ("PyTorch/Pickle", False))
                 digest = _sha256_file(fpath)
                 _add(
                     AIAsset(

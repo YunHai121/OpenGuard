@@ -418,6 +418,19 @@ def create_app(db_path: Optional[Path] = None) -> FastAPI:
                 content=evaluate_compliance(report),
                 headers={"Content-Disposition": f'attachment; filename="{safe_id}_compliance.json"'},
             )
+        if fmt_l == "aibom":
+            from openguard.aibom import AIBOMReport, discover_ai_assets, render_cyclonedx_aibom
+
+            tpath = Path(report.target_path)
+            if tpath.exists():
+                cfg = load_config(tpath if tpath.is_dir() else tpath.parent)
+                rep = discover_ai_assets(tpath, exclude_patterns=cfg.exclude_patterns)
+            else:
+                rep = AIBOMReport(target_name=report.target_name)
+            return JSONResponse(
+                content=render_cyclonedx_aibom(rep),
+                headers={"Content-Disposition": f'attachment; filename="{safe_id}.aibom.cdx.json"'},
+            )
         if fmt_l == "badge":
             return Response(content=render_badge_svg(report), media_type="image/svg+xml")
         if fmt_l == "json":
