@@ -16,7 +16,7 @@ from typing import Any, Dict, List, Optional
 
 from openguard import __version__
 from openguard.auditor import OpenGuardAuditor
-from openguard.config import AuditConfig
+from openguard.config import AuditConfig, load_config
 from openguard.dx import run_doctor
 from openguard.models import DependencyComponent
 from openguard.reporters.markdown_reporter import render_pr_comment
@@ -150,11 +150,11 @@ MCP_TOOLS: List[Dict[str, Any]] = [
 def _handle_tool_call(name: str, arguments: Dict[str, Any]) -> Dict[str, Any]:
     if name == "audit_repository":
         target = str(arguments["target_path"])
-        cfg = AuditConfig(
-            offline=bool(arguments.get("offline", True)),
-            include_git_history=bool(arguments.get("include_git_history", False)),
-            diff_ref=arguments.get("diff_ref") or None,
-        )
+        tpath = Path(target)
+        cfg = load_config(tpath if tpath.is_dir() else tpath.parent) if tpath.exists() else AuditConfig()
+        cfg.offline = bool(arguments.get("offline", True))
+        cfg.include_git_history = bool(arguments.get("include_git_history", False))
+        cfg.diff_ref = arguments.get("diff_ref") or None
         report = OpenGuardAuditor(cfg).audit(target)
         payload = {
             "target_name": report.target_name,
@@ -220,7 +220,10 @@ def _handle_tool_call(name: str, arguments: Dict[str, Any]) -> Dict[str, Any]:
 
     if name == "generate_pr_comment":
         target = str(arguments["target_path"])
-        cfg = AuditConfig(offline=True, diff_ref=arguments.get("diff_ref") or None)
+        tpath = Path(target)
+        cfg = load_config(tpath if tpath.is_dir() else tpath.parent) if tpath.exists() else AuditConfig()
+        cfg.offline = True
+        cfg.diff_ref = arguments.get("diff_ref") or None
         report = OpenGuardAuditor(cfg).audit(target)
         return {"markdown": render_pr_comment(report)}
 
@@ -235,7 +238,9 @@ def _handle_tool_call(name: str, arguments: Dict[str, Any]) -> Dict[str, Any]:
         if target.is_file():
             sbom_data = load_cyclonedx_json(target)
         else:
-            report = OpenGuardAuditor(AuditConfig(offline=True)).audit(target)
+            cfg = load_config(target)
+            cfg.offline = True
+            report = OpenGuardAuditor(cfg).audit(target)
             sbom_data = render_cyclonedx(report)
         qr = score_sbom_quality(sbom_data)
         return {
@@ -251,7 +256,10 @@ def _handle_tool_call(name: str, arguments: Dict[str, Any]) -> Dict[str, Any]:
 
         target = str(arguments["target_path"])
         offline = bool(arguments.get("offline", True))
-        report = OpenGuardAuditor(AuditConfig(offline=offline)).audit(target)
+        tpath = Path(target)
+        cfg = load_config(tpath if tpath.is_dir() else tpath.parent) if tpath.exists() else AuditConfig()
+        cfg.offline = offline
+        report = OpenGuardAuditor(cfg).audit(target)
         return evaluate_compliance(report)
 
     raise ValueError(f"Unknown OpenGuard MCP tool: {name}")
@@ -308,6 +316,12 @@ def handle_jsonrpc_request(request: Dict[str, Any]) -> Optional[Dict[str, Any]]:
 
 def run_stdio_server() -> None:
     """Run newline-delimited JSON-RPC 2.0 MCP server over stdin/stdout."""
+    for stream in (sys.stdin, sys.stdout):
+        if hasattr(stream, "reconfigure"):
+            try:
+                stream.reconfigure(encoding="utf-8", errors="replace")
+            except Exception:
+                pass
     for raw_line in sys.stdin:
         line = raw_line.strip()
         if not line:

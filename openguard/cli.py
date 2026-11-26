@@ -31,12 +31,13 @@ from openguard.remediation.hook_installer import HookInstaller
 from openguard.remediation.secret_remediator import SecretRemediator
 from openguard.utils.loc_counter import count_repository_loc
 
-# Ensure Windows stdout handles UTF-8 gracefully
-if hasattr(sys.stdout, "reconfigure"):
-    try:
-        sys.stdout.reconfigure(encoding="utf-8", errors="replace")
-    except Exception:
-        pass
+# Ensure Windows stdout/stderr handle UTF-8 gracefully
+for _stream in (sys.stdout, sys.stderr):
+    if hasattr(_stream, "reconfigure"):
+        try:
+            _stream.reconfigure(encoding="utf-8", errors="replace")
+        except Exception:
+            pass
 
 app = typer.Typer(
     name="openguard",
@@ -273,12 +274,17 @@ def autofix(
     force: bool = typer.Option(False, "--force", help="文档生成时强制覆盖已有文件"),
 ) -> None:
     """自动修复硬编码敏感凭据、补齐缺失开源工程文档与升级漏洞依赖（默认预览模式，加 --apply 执行写入）。"""
+    if not target.exists():
+        err_console.print(f"[bold red]目标路径不存在:[/bold red] {target}")
+        raise typer.Exit(code=EXIT_USER_ERROR)
     if not secrets and not docs and not deps:
         secrets = True
         docs = True
 
     root = target.resolve()
-    auditor = OpenGuardAuditor(AuditConfig(offline=True))
+    cfg = load_config(root if root.is_dir() else root.parent)
+    cfg.offline = True
+    auditor = OpenGuardAuditor(cfg)
     cached_report: Optional[AuditReport] = None
 
     if secrets:
@@ -333,9 +339,14 @@ def baseline(
 ) -> None:
     """生成存量风险基线文件，帮助老项目零痛苦接入 OpenGuard CI 门禁（仅拦截新增隐患）。"""
     if action.lower().strip() != "create":
-        console.print(f"[red]未知 baseline 操作: {action}（当前支持: create）[/red]")
-        raise typer.Exit(code=2)
-    report = OpenGuardAuditor(AuditConfig(offline=offline)).audit(target)
+        err_console.print(f"[red]未知 baseline 操作: {action}（当前支持: create）[/red]")
+        raise typer.Exit(code=EXIT_USER_ERROR)
+    if not target.exists():
+        err_console.print(f"[bold red]目标路径不存在:[/bold red] {target}")
+        raise typer.Exit(code=EXIT_USER_ERROR)
+    cfg = load_config(target if target.is_dir() else target.parent)
+    cfg.offline = offline
+    report = OpenGuardAuditor(cfg).audit(target)
     saved = save_baseline(report, output)
     data = json.loads(saved.read_text(encoding="utf-8"))
     console.print(f"[green]已生成基线快照 ({len(data.get('fingerprints', []))} 条存量指纹):[/green] {saved}")
@@ -360,8 +371,13 @@ def attest(
     from openguard.reporters.slsa_provenance import verify_slsa_provenance
 
     act = action.lower().strip()
+    if not target.exists():
+        err_console.print(f"[bold red]目标路径不存在:[/bold red] {target}")
+        raise typer.Exit(code=EXIT_USER_ERROR)
     if act == "generate":
-        report = OpenGuardAuditor(AuditConfig(offline=True)).audit(target)
+        cfg = load_config(target if target.is_dir() else target.parent)
+        cfg.offline = True
+        report = OpenGuardAuditor(cfg).audit(target)
         written = OpenGuardAuditor.export_report(report, "slsa", output)
         console.print(f"[green]已生成 SLSA v1.0 / in-toto 证明文件:[/green] {written[0]}")
     elif act == "verify":
@@ -384,7 +400,15 @@ def sbom(
     output: Optional[Path] = typer.Option(None, "--output", "-o", help="输出文件路径"),
 ) -> None:
     """生成符合 CycloneDX 1.5 或 SPDX 2.3 规范的软件物料清单 (SBOM)。"""
-    auditor = OpenGuardAuditor(AuditConfig(offline=True))
+    if not target.exists():
+        err_console.print(f"[bold red]目标路径不存在:[/bold red] {target}")
+        raise typer.Exit(code=EXIT_USER_ERROR)
+    if spec.lower().strip() not in ("cyclonedx", "spdx"):
+        err_console.print(f"[bold red]不支持的 SBOM 规范:[/bold red] {spec}（可选: cyclonedx | spdx）")
+        raise typer.Exit(code=EXIT_USER_ERROR)
+    cfg = load_config(target if target.is_dir() else target.parent)
+    cfg.offline = True
+    auditor = OpenGuardAuditor(cfg)
     report = auditor.audit(target)
     out_path = output or Path(f"sbom.{spec.lower()}.json")
     auditor.export_report(report, spec, out_path)
@@ -438,6 +462,9 @@ def cloc(
     json_out: Optional[Path] = typer.Option(None, "--json-out", help="将统计结果导出为 JSON 文件"),
 ) -> None:
     """内置多语言有效代码行数统计工具（统计范围与排除项清晰可审计）。"""
+    if not target.exists():
+        err_console.print(f"[bold red]目标路径不存在:[/bold red] {target}")
+        raise typer.Exit(code=EXIT_USER_ERROR)
     subs = [s.strip() for s in exclude_subpaths.split(",") if s.strip()] if exclude_subpaths else []
     stats = count_repository_loc(target, exclude_subpaths=subs)
 
@@ -500,6 +527,9 @@ def batch(
     """组织级/竞赛评审级批量多仓审计：一键扫描目录下所有子项目并输出汇总矩阵与 JSONL 流。"""
     from openguard.portfolio import PortfolioAuditor, discover_child_repositories
 
+    if not parent_dir.exists():
+        err_console.print(f"[bold red]目标目录不存在:[/bold red] {parent_dir}")
+        raise typer.Exit(code=EXIT_USER_ERROR)
     repos = discover_child_repositories(parent_dir)
     if not repos:
         console.print(f"[yellow]未在 {parent_dir} 下发现可审计的子项目目录。[/yellow]")
@@ -550,6 +580,10 @@ def sbom_diff(
     """对比两份 CycloneDX SBOM，检测新增/升级/移除组件、许可证漂移与新增漏洞。"""
     from openguard.sbom_tools import diff_cyclonedx_sboms, load_cyclonedx_json, render_sbom_diff_markdown
 
+    for p in (before, after):
+        if not p.is_file():
+            err_console.print(f"[bold red]SBOM 文件不存在:[/bold red] {p}")
+            raise typer.Exit(code=EXIT_USER_ERROR)
     diff = diff_cyclonedx_sboms(load_cyclonedx_json(before), load_cyclonedx_json(after))
     md = render_sbom_diff_markdown(diff)
     console.print(md)
@@ -571,10 +605,15 @@ def sbom_score(
     from openguard.reporters.sarif_sbom_reporter import render_cyclonedx
     from openguard.sbom_tools import load_cyclonedx_json, score_sbom_quality
 
+    if not target.exists():
+        err_console.print(f"[bold red]目标路径不存在:[/bold red] {target}")
+        raise typer.Exit(code=EXIT_USER_ERROR)
     if target.is_file():
         sbom_data = load_cyclonedx_json(target)
     else:
-        rep = OpenGuardAuditor(AuditConfig(offline=True)).audit(target)
+        cfg = load_config(target)
+        cfg.offline = True
+        rep = OpenGuardAuditor(cfg).audit(target)
         sbom_data = render_cyclonedx(rep)
 
     qr = score_sbom_quality(sbom_data)
@@ -682,7 +721,9 @@ def compliance(
         err_console.print(f"[bold red]目标路径不存在:[/bold red] {target}")
         raise typer.Exit(code=EXIT_USER_ERROR)
 
-    report = OpenGuardAuditor(AuditConfig(offline=offline)).audit(target)
+    cfg = load_config(target if target.is_dir() else target.parent)
+    cfg.offline = offline
+    report = OpenGuardAuditor(cfg).audit(target)
     data = evaluate_compliance(report)
 
     if output:

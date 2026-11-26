@@ -13,7 +13,7 @@
       <div class="brand">
         <svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3a12 12 0 0 0 8.5 3a12 12 0 0 1 -8.5 15a12 12 0 0 1 -8.5 -15a12 12 0 0 0 8.5 -3"/><path d="M9 12l2 2l4 -4"/></svg>
         <span class="brand-name">OpenGuard</span>
-        <span class="version-pill">v1.1</span>
+        <span id="version-pill" class="version-pill">v1.4</span>
       </div>
 
       <div class="topbar-right">
@@ -39,6 +39,8 @@
             <a id="exp-sarif" target="_blank">SARIF 2.1.0 (IDE/CI)</a>
             <a id="exp-cdx" target="_blank">CycloneDX 1.5 SBOM (含 VEX)</a>
             <a id="exp-spdx" target="_blank">SPDX 2.3 SBOM</a>
+            <a id="exp-slsa" target="_blank">SLSA v1.0 完整度证明</a>
+            <a id="exp-compliance" target="_blank">EU CRA / NIST SSDF 合规报告 (JSON)</a>
             <a id="exp-md" target="_blank">Markdown 摘要报告</a>
             <a id="exp-pr" target="_blank">PR / MR 评审评论 Markdown</a>
             <a id="exp-badge" target="_blank">SVG 合规状态徽章</a>
@@ -106,7 +108,7 @@
     <section id="view-overview" class="view active">
       <div id="overview-empty" class="card empty-state">
         <div class="empty-title">准备就绪 — 选择预设演示仓库或输入本地路径开始审计</div>
-        <p class="muted">一次审计涵盖：46+ 类硬编码密钥与 Base62 CRC32 校验、CVE Call-Graph 可达性与 CISA KEV/EPSS、10 生态 SBOM 与 GPL 传染链、7 语言 SAST/污点分析、AI 规则投毒与 IaC/CI 防线及 12 项开源工程规范体检。</p>
+        <p class="muted">一次审计涵盖：54 条硬编码凭据规则与 Base62 CRC32 校验、CVE Call-Graph 可达性与 CISA KEV/EPSS、10 生态 SBOM 与 GPL 传染链、7 语言 SAST/跨语句污点分析、ML 模型反序列化与 CycloneDX 1.6 AIBOM、AI 规则投毒与 IaC/CI 防线及 EU CRA / NIST SSDF 合规映射。</p>
       </div>
 
       <div id="overview-content" class="hidden">

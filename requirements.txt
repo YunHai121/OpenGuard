@@ -9,4 +9,3 @@ packaging>=24.0
 PyYAML>=6.0.1
 Jinja2>=3.1.4
 reportlab>=4.1.0
-python-docx>=1.1.0

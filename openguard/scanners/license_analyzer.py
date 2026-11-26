@@ -5,7 +5,13 @@ from __future__ import annotations
 import importlib.metadata
 import json
 import re
-import tomllib
+try:
+    import tomllib
+except ModuleNotFoundError:  # Python 3.10 fallback
+    try:
+        import tomli as tomllib  # type: ignore[no-redef]
+    except ModuleNotFoundError:
+        tomllib = None  # type: ignore[assignment]
 from pathlib import Path
 from typing import Dict, List, Optional, Tuple
 
@@ -329,7 +335,7 @@ class LicenseAnalyzer:
                 pass
 
         pyproject = root / "pyproject.toml"
-        if pyproject.is_file():
+        if pyproject.is_file() and tomllib is not None:
             try:
                 with pyproject.open("rb") as f:
                     data = tomllib.load(f)
@@ -342,7 +348,7 @@ class LicenseAnalyzer:
                 pass
 
         cargo = root / "Cargo.toml"
-        if cargo.is_file():
+        if cargo.is_file() and tomllib is not None:
             try:
                 with cargo.open("rb") as f:
                     data = tomllib.load(f)

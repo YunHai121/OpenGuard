@@ -3,12 +3,16 @@ stages:
   - test
   - security_audit
 
+variables:
+  PIP_DISABLE_PIP_VERSION_CHECK: "1"
+  PIP_DEFAULT_TIMEOUT: "60"
+
 unit_tests:
   stage: test
   image: python:3.11-slim
   before_script:
-    - pip install -r requirements.txt
-    - pip install -e . --no-build-isolation --no-deps
+    - pip install --no-cache-dir -r requirements.txt
+    - pip install --no-cache-dir -e . --no-build-isolation --no-deps
   script:
     - python -m unittest discover -s tests -v
 
@@ -16,10 +20,12 @@ openguard_self_audit:
   stage: security_audit
   image: python:3.11-slim
   before_script:
-    - pip install -r requirements.txt
-    - pip install -e . --no-build-isolation --no-deps
+    - pip install --no-cache-dir -r requirements.txt
+    - pip install --no-cache-dir -e . --no-build-isolation --no-deps
   script:
     - openguard scan . --offline --format all --output openguard_reports --fail-on high
+    - openguard compliance . --offline --fail-on-noncompliant
+    - openguard doctor .
   artifacts:
     when: always
     paths:

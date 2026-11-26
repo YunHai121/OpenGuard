@@ -7,6 +7,7 @@ import os
 import shutil
 import stat
 import subprocess
+import sys
 import tempfile
 import time
 from pathlib import Path
@@ -40,6 +41,21 @@ from openguard.scanners.reachability_analyzer import ReachabilityAnalyzer
 from openguard.scanners.secret_scanner import SecretScanner
 from openguard.scanners.vuln_scanner import VulnScanner
 from openguard.scoring.engine import ScoringEngine
+
+
+def _safe_rmtree(path: Path) -> None:
+    """Recursively remove a directory across Python 3.10–3.14, clearing read-only bits on Windows."""
+    def _rw_handler(func, target_path, _exc):
+        try:
+            os.chmod(target_path, stat.S_IWRITE)
+            func(target_path)
+        except OSError:
+            pass
+
+    if sys.version_info >= (3, 12):
+        shutil.rmtree(path, onexc=_rw_handler)
+    else:
+        shutil.rmtree(path, onerror=_rw_handler)
 
 
 def _is_remote_git_url(target: str) -> bool:
@@ -80,14 +96,7 @@ class OpenGuardAuditor:
             report.target_name = url.rstrip("/").rsplit("/", 1)[-1].removesuffix(".git")
             return report
         finally:
-            def _rw_handler(func, path, _exc):
-                try:
-                    os.chmod(path, stat.S_IWRITE)
-                    func(path)
-                except OSError:
-                    pass
-
-            shutil.rmtree(temp_dir, onexc=_rw_handler)
+            _safe_rmtree(temp_dir)
 
     def _audit_local_path(self, target_path: Path, config_path: Optional[Path] = None) -> AuditReport:
         resolved = target_path.resolve()
@@ -97,13 +106,27 @@ class OpenGuardAuditor:
         t0 = time.perf_counter()
         repo_root = resolved.parent if resolved.is_file() else resolved
 
-        cfg = self.base_config or load_config(repo_root, config_path=config_path)
-        if self.base_config and (repo_root / ".openguardignore").is_file():
-            # Respect repo's .openguardignore even when explicit AuditConfig passed
-            loaded_ignores = load_config(repo_root, config_path=config_path).exclude_patterns
-            for pat in loaded_ignores:
-                if pat not in cfg.exclude_patterns:
-                    cfg.exclude_patterns.append(pat)
+        if self.base_config is not None:
+            cfg = self.base_config.model_copy(deep=True)
+            has_repo_cfg = (
+                config_path is not None
+                or (repo_root / ".openguard.yml").is_file()
+                or (repo_root / ".openguard.yaml").is_file()
+                or (repo_root / ".openguardignore").is_file()
+            )
+            if has_repo_cfg:
+                repo_cfg = load_config(repo_root, config_path=config_path)
+                for pat in repo_cfg.exclude_patterns:
+                    if pat not in cfg.exclude_patterns:
+                        cfg.exclude_patterns.append(pat)
+                if not cfg.policy and repo_cfg.policy:
+                    cfg.policy = dict(repo_cfg.policy)
+                if not cfg.custom_rules and repo_cfg.custom_rules:
+                    cfg.custom_rules = list(repo_cfg.custom_rules)
+                if not cfg.custom_sast_rules and repo_cfg.custom_sast_rules:
+                    cfg.custom_sast_rules = list(repo_cfg.custom_sast_rules)
+        else:
+            cfg = load_config(repo_root, config_path=config_path)
 
         # 0. Optional Diff-Aware Incremental Scope (--diff <base_ref>)
         diff_added_map = (

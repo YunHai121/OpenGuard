@@ -23,7 +23,7 @@ fi
 
 if [ $STATUS -ne 0 ]; then
     echo "[OpenGuard] BLOCKED: High/Critical secrets or security flaws found in staged files!"
-    echo "Run 'openguard autofix . --secrets --dry-run' or add '# openguard: ignore' if intentional."
+    echo "Run 'openguard autofix . --secrets' to preview remediation or add '# openguard: ignore' if intentional."
     exit 1
 fi
 exit 0
@@ -36,9 +36,12 @@ stages:
 openguard_audit:
   stage: security_audit
   image: python:3.11-slim
+  variables:
+    PIP_DISABLE_PIP_VERSION_CHECK: "1"
+    PIP_DEFAULT_TIMEOUT: "60"
   before_script:
-    - pip install -r requirements.txt || true
-    - pip install -e . --no-deps || true
+    - pip install --no-cache-dir -r requirements.txt
+    - pip install --no-cache-dir -e . --no-build-isolation --no-deps
   script:
     - openguard scan . --offline --format all --output openguard_reports --fail-on critical
   artifacts:
@@ -56,24 +59,31 @@ on:
   pull_request:
     branches: [ main, master ]
 
+permissions:
+  contents: read
+
 jobs:
   openguard-audit:
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
           fetch-depth: 50
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5
         with:
           python-version: "3.11"
       - name: Install OpenGuard
-        run: pip install -e .
+        run: |
+          pip install --no-cache-dir -r requirements.txt
+          pip install --no-cache-dir -e . --no-build-isolation --no-deps
       - name: Run OpenGuard Audit
         run: |
           openguard scan . --git-history --offline --format all --output openguard_reports --fail-on high
       - name: Upload Security Artifacts
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: openguard-security-reports
           path: openguard_reports/

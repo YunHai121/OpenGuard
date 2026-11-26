@@ -5,7 +5,13 @@ from __future__ import annotations
 import json
 import os
 import re
-import tomllib
+try:
+    import tomllib
+except ModuleNotFoundError:  # Python 3.10 fallback
+    try:
+        import tomli as tomllib  # type: ignore[no-redef]
+    except ModuleNotFoundError:
+        tomllib = None  # type: ignore[assignment]
 import xml.etree.ElementTree as ET
 from pathlib import Path
 from typing import Dict, List, Optional, Tuple
@@ -174,6 +180,8 @@ class DependencyParser:
                 edges.append((proj, comp.name))
 
     def _parse_pyproject_toml(self, fpath: Path, rel: str, upsert, proj: str, edges, graph) -> None:
+        if tomllib is None:
+            return
         try:
             with fpath.open("rb") as f:
                 data = tomllib.load(f)
@@ -378,6 +386,8 @@ class DependencyParser:
             edges.append((proj, comp.name))
 
     def _parse_cargo_toml(self, fpath: Path, rel: str, upsert, proj: str, edges, graph) -> None:
+        if tomllib is None:
+            return
         try:
             with fpath.open("rb") as f:
                 data = tomllib.load(f)
@@ -401,6 +411,8 @@ class DependencyParser:
                 edges.append((proj, comp.name))
 
     def _parse_cargo_lock(self, fpath: Path, rel: str, upsert, proj: str, edges, graph) -> None:
+        if tomllib is None:
+            return
         try:
             with fpath.open("rb") as f:
                 data = tomllib.load(f)
@@ -483,6 +495,8 @@ class DependencyParser:
 
     def _parse_python_toml_lock(self, fpath: Path, rel: str, upsert, proj: str, edges, graph) -> None:
         """Parse `uv.lock` and `poetry.lock` TOML lockfiles with exact transitive dependencies."""
+        if tomllib is None:
+            return
         try:
             with fpath.open("rb") as f:
                 data = tomllib.load(f)

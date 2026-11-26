@@ -27,22 +27,23 @@
 2. **10 大生态依赖解析、SBOM Diff 漂移守卫、NTIA 评分与 SLSA v1.0 证明**
    - 零编译静态解析 **PyPI / npm / Go / Maven / Rust / C++ / PHP / RubyGems / .NET NuGet / GitHub Actions** 10 大生态清单与锁文件（`requirements.txt`、`pyproject.toml`、`uv.lock`、`poetry.lock`、`package-lock.json`、`yarn.lock`、`pnpm-lock.yaml`、`go.mod`、`go.sum`、`pom.xml`、`Cargo.lock`、`Gemfile.lock`、`composer.lock`、`*.csproj`、`.github/workflows/*.yml`），导出 **CycloneDX 1.5（含自动 VEX 与 KEV/EPSS 属性）**、**SPDX 2.3** 与 **SLSA v1.0 / in-toto 完整性证明（`openguard attest generate|verify`）**。
    - 新增 **`openguard sbom-diff`**（拦截新增漏洞与 Copyleft 许可证漂移）与 **`openguard sbom-score`**（对标 `sbomqs` 的 7 项 NTIA/CISA 最小要素 0–10.0 质量评分）。
+   - 新增 **`openguard aibom`（CycloneDX 1.6 ML-BOM）** 与 **`openguard compliance`（EU CRA / NIST SSDF / OWASP SCVS 8 项合规映射）**。
    - 支持 **20+ SPDX 主许可证识别（含 `MulanPSL-2.0`）** 与 **声明式 Policy-as-Code（`.openguard.yml` 许可证黑白名单与禁用包门禁 + `.openguard/rules/*.yml` 自定义规则）**。
 
-3. **函数级 CVE 可达性 + CISA KEV/EPSS + 7 语言 SAST/跨语句污点 + AI/云原生防线**
+3. **函数级 CVE 可达性 + CISA KEV/EPSS + 7 语言 SAST/跨语句污点 + AI/ML 模型与云原生防线**
    - 融合 2020–2026 本地高危 CVE 库（含 React RSC / Next.js / Brotli / Axios / Log4j）、OSV.dev、**CISA KEV** 与 **EPSS 概率**，结合 **Call-Graph 函数调用级可达性**自动划分 `P0`–`P3` 风险梯队并生成 CycloneDX VEX (`code_not_reachable`)。
    - **7 语言 SAST + Python/JS 跨语句污点传播引擎**：覆盖 Python (`PythonTaintAnalyzer`)、JavaScript/TypeScript (`JSTaintAnalyzer`)、Go、Java、C/C++、Rust（支持 `// SAFETY:` 契约识别）与 Shell。
-   - **云原生与 AI 时代全链路防线**：CI/CD 工作流（未锁 40 位 SHA Action、`pull_request_target`、表达式注入）、**AI Rules-File Backdoor（隐蔽 Unicode Tag `U+E0000` 解码、Trojan Source BiDi、`.cursorrules`/`CLAUDE.md` 间接注入、`.mcp.json` 配置投毒）**、**IaC（Dockerfile / Docker Compose / Kubernetes / Terraform）** 与锁文件完整性降级守卫。
+   - **云原生与 AI 时代全链路防线**：CI/CD 工作流（未锁 40 位 SHA Action、`pull_request_target`、`tj-actions` 告警、表达式注入）、**ML 模型反序列化静态反汇编（`OG-ML-001` zero-exec Pickle/PyTorch 扫描 + `torch.load`/`trust_remote_code` SAST）**、**AI Rules-File Backdoor（隐蔽 Unicode Tag `U+E0000` 解码、Trojan Source BiDi、`.cursorrules`/`CLAUDE.md` 间接注入、`.mcp.json` 配置投毒）**、**IaC（Dockerfile / Docker Compose / Kubernetes / Terraform）** 与敏感提交产物/锁文件防线。
 
-4. **企业级开发者体验（DX）、多仓批量审计 (`batch`)、一键修复与 6 工具 MCP Server**
+4. **企业级开发者体验（DX）、多仓批量审计 (`batch`)、一键修复与 7 工具 MCP Server**
    - **`openguard init` & `openguard doctor`**：自动探测技术栈幂等初始化配置、7 项安全态势自检；`scan` 原生支持 **`--json`** 纯净管道输出、**`--audit-mode`** 非阻塞观察模式、标准 `0/1/2/3` 退出码、`--diff` PR 增量扫描与 `--baseline` 存量基线。
    - **`openguard batch`**：组织/竞赛级多仓批量审计，流式导出 JSONL（适配 SIEM/BI）与 Portfolio Markdown 排行榜。
-   - **`autofix` 三位一体自动修复**：硬编码密钥环境变量重构（`--secrets`）、漏洞依赖最小安全升级（`--deps`）及开源规范文档补齐（`--docs`），默认 dry-run Diff 预览并自动备份至 `.openguard_backup/`。
-   - **内置 6 工具 MCP Server (`openguard mcp`)**：零额外依赖向 Claude Code / Cursor / Antigravity 暴露 `audit_repository`、`audit_code_snippet`、`check_package_safety`、`generate_pr_comment`、`diagnose_repo_posture` 与 `evaluate_sbom_quality`。
+   - **`autofix` 三位一体自动修复**：硬编码密钥环境变量重构（`--secrets`）、6 生态漏洞依赖最小安全升级（`--deps`，支持 `--no-major` 跨主版本保护）及开源规范文档补齐（`--docs`），默认 dry-run Diff 预览并自动备份至 `.openguard_backup/`。
+   - **内置 7 工具 MCP Server (`openguard mcp`)**：零额外依赖向 Claude Code / Cursor / Antigravity 暴露 `audit_repository`、`audit_code_snippet`、`check_package_safety`、`generate_pr_comment`、`diagnose_repo_posture`、`evaluate_sbom_quality` 与 `evaluate_compliance`。
 
 5. **极简工程风离线 Web 工作台与多格式报告**
-   - 零外网 CDN 依赖的 Light-First 工程界面（支持深色切换与 `Ctrl+K` 全局检索）：包含质量门禁总览、**Doctor 仓库安全态势自检**、**NTIA SBOM 质量评分面板**、Master-Detail 源码上下文溯源分栏、SVG 依赖传播图与整改前后 Diff 对比。
-   - 支持导出 **HTML、中文 PDF（ReportLab）、SARIF 2.1.0、CycloneDX 1.5、SPDX 2.3、SLSA v1.0、Markdown、PR 评论、JSON 及 SVG 徽章**。
+   - 零外网 CDN 依赖的 Light-First 工程界面（支持深色切换与 `Ctrl+K` 全局检索）：包含质量门禁总览、**Doctor 仓库安全态势自检**、**EU CRA / NIST SSDF 合规映射面板**、**NTIA SBOM 质量评分面板**、Master-Detail 源码上下文溯源分栏、SVG 依赖传播图与整改前后 Diff 对比。
+   - 支持导出 **HTML、中文 PDF（ReportLab）、SARIF 2.1.0、CycloneDX 1.5（软件）/ 1.6（AIBOM）、SPDX 2.3、SLSA v1.0、合规映射 JSON、Markdown、PR 评论、JSON 及 SVG 徽章**。
 
 ---
 
@@ -71,9 +72,12 @@ flowchart TD
 
 ### 1. 安装
 
+> 代码已双平台同步托管于华中科技大学校内 Git 平台（`https://git.hust.edu.cn/U202414594/openguard`）与 GitHub。
+
 ```bash
-git clone https://github.com/YunHai121/OpenGuard.git
-cd OpenGuard
+git clone https://git.hust.edu.cn/U202414594/openguard.git
+# 或从 GitHub 克隆: git clone https://github.com/YunHai121/OpenGuard.git
+cd openguard
 pip install -r requirements.txt
 pip install -e . --no-build-isolation --no-deps
 openguard version
@@ -108,8 +112,10 @@ openguard baseline create path/to/your_repo -o .openguard-baseline.json
 openguard scan path/to/your_repo --diff origin/main --baseline .openguard-baseline.json --format pr-comment -o pr_comment.md
 openguard scan path/to/your_repo --offline --cache --json | jq '.summary'
 
-# SBOM 漂移拦截、NTIA 质量评分与多仓批量审计
+# SBOM 漂移拦截、NTIA 质量评分、CycloneDX 1.6 AIBOM、EU CRA 合规与多仓批量审计
 openguard sbom-score . --min-score 8.0
+openguard aibom . -o aibom.cdx.json
+openguard compliance . --offline --fail-on-noncompliant
 openguard batch path/to/projects_dir --offline --jsonl-out audit.jsonl --md-out portfolio.md
 
 # 安装提交前防泄密 Git Hook 与 git.hust.edu.cn GitLab CI
@@ -140,7 +146,7 @@ repos:
 }
 ```
 
-接入后，AI 编程助手可在写入代码或执行 `pip install` / `npm install` 前自动调用 `audit_code_snippet`、`check_package_safety`（防仿冒包与 AI 幻觉包 Slopsquatting）、`audit_repository`、`generate_pr_comment`、`diagnose_repo_posture` 与 `evaluate_sbom_quality`。
+接入后，AI 编程助手可在写入代码或执行 `pip install` / `npm install` 前自动调用 `audit_code_snippet`、`check_package_safety`（防仿冒包与 AI 幻觉包 Slopsquatting）、`audit_repository`、`generate_pr_comment`、`diagnose_repo_posture`、`evaluate_sbom_quality` 与 `evaluate_compliance`。
 
 ### 5. Python SDK 第三方集成
 

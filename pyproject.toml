@@ -47,6 +47,7 @@ dependencies = [
     "PyYAML>=6.0.1",
     "Jinja2>=3.1.4",
     "reportlab>=4.1.0",
+    "tomli>=2.0.1; python_version < '3.11'",
 ]
 
 [project.scripts]

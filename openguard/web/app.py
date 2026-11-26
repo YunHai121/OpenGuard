@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import re
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
@@ -49,6 +50,7 @@ class AutofixRequest(BaseModel):
     fix_secrets: bool = True
     fix_docs: bool = True
     fix_deps: bool = False
+    allow_major: bool = True
     license_id: str = "MIT"
 
 
@@ -168,9 +170,17 @@ def create_app(db_path: Optional[Path] = None) -> FastAPI:
         if not target_path.exists():
             raise HTTPException(status_code=404, detail=f"目标路径不存在: {target_path}")
 
-        auditor = OpenGuardAuditor(AuditConfig(offline=True))
+        cfg = load_config(target_path if target_path.is_dir() else target_path.parent)
+        cfg.offline = True
+        auditor = OpenGuardAuditor(cfg)
         secret_res_dict: Dict[str, Any] = {"files_modified": 0, "findings_remediated": 0, "previews": [], "notes": []}
-        dep_res_dict: Dict[str, Any] = {"files_modified": 0, "packages_upgraded": 0, "previews": []}
+        dep_res_dict: Dict[str, Any] = {
+            "files_modified": 0,
+            "packages_upgraded": 0,
+            "previews": [],
+            "breaking_warnings": [],
+            "skipped_breaking": [],
+        }
         doc_actions: Dict[str, str] = {}
         cached_report = None
 
@@ -197,11 +207,13 @@ def create_app(db_path: Optional[Path] = None) -> FastAPI:
         if req.fix_deps:
             if cached_report is None:
                 cached_report = auditor.audit(target_path)
-            drem = DependencyRemediator().remediate(target_path, cached_report, apply=apply)
+            drem = DependencyRemediator().remediate(target_path, cached_report, apply=apply, allow_major=req.allow_major)
             dep_res_dict = {
                 "applied": drem.applied,
                 "files_modified": drem.files_modified,
                 "packages_upgraded": drem.packages_upgraded,
+                "breaking_warnings": drem.breaking_warnings,
+                "skipped_breaking": drem.skipped_breaking,
                 "previews": [
                     {
                         "file_path": p.file_path,
@@ -297,6 +309,8 @@ def create_app(db_path: Optional[Path] = None) -> FastAPI:
 
     @fastapi_app.get("/api/doctor")
     def api_doctor(target: str) -> Dict[str, Any]:
+        if not target.strip():
+            raise HTTPException(status_code=400, detail="请提供有效的目标路径。")
         target_path = Path(target).resolve()
         if not target_path.exists():
             raise HTTPException(status_code=404, detail=f"诊断目标路径不存在: {target}")
@@ -331,6 +345,8 @@ def create_app(db_path: Optional[Path] = None) -> FastAPI:
     def api_aibom(target: str) -> Dict[str, Any]:
         from openguard.aibom import discover_ai_assets, render_cyclonedx_aibom
 
+        if not target.strip():
+            raise HTTPException(status_code=400, detail="请提供有效的目标路径。")
         target_path = Path(target).resolve()
         if not target_path.exists():
             raise HTTPException(status_code=404, detail=f"目标路径不存在: {target}")
@@ -349,50 +365,58 @@ def create_app(db_path: Optional[Path] = None) -> FastAPI:
         if not report:
             raise HTTPException(status_code=404, detail=f"未找到扫描记录: {scan_id}")
 
+        safe_id = re.sub(r"[^A-Za-z0-9_.-]", "_", scan_id)
         fmt_l = fmt.lower().strip()
         if fmt_l == "html":
             return Response(
                 content=render_html_report(report),
                 media_type="text/html; charset=utf-8",
-                headers={"Content-Disposition": f'attachment; filename="{scan_id}.html"'},
+                headers={"Content-Disposition": f'attachment; filename="{safe_id}.html"'},
             )
         if fmt_l == "pdf":
             return Response(
                 content=render_pdf_bytes(report),
                 media_type="application/pdf",
-                headers={"Content-Disposition": f'attachment; filename="{scan_id}.pdf"'},
+                headers={"Content-Disposition": f'attachment; filename="{safe_id}.pdf"'},
             )
         if fmt_l in ("md", "markdown"):
             return Response(
                 content=render_markdown_report(report),
                 media_type="text/markdown; charset=utf-8",
-                headers={"Content-Disposition": f'attachment; filename="{scan_id}.md"'},
+                headers={"Content-Disposition": f'attachment; filename="{safe_id}.md"'},
             )
         if fmt_l in ("pr-comment", "pr_comment"):
             return Response(
                 content=render_pr_comment(report),
                 media_type="text/markdown; charset=utf-8",
-                headers={"Content-Disposition": f'attachment; filename="{scan_id}_pr_comment.md"'},
+                headers={"Content-Disposition": f'attachment; filename="{safe_id}_pr_comment.md"'},
             )
         if fmt_l == "sarif":
             return JSONResponse(
                 content=render_sarif(report),
-                headers={"Content-Disposition": f'attachment; filename="{scan_id}.sarif.json"'},
+                headers={"Content-Disposition": f'attachment; filename="{safe_id}.sarif.json"'},
             )
         if fmt_l == "cyclonedx":
             return JSONResponse(
                 content=render_cyclonedx(report),
-                headers={"Content-Disposition": f'attachment; filename="{scan_id}.cyclonedx.json"'},
+                headers={"Content-Disposition": f'attachment; filename="{safe_id}.cyclonedx.json"'},
             )
         if fmt_l == "spdx":
             return JSONResponse(
                 content=render_spdx(report),
-                headers={"Content-Disposition": f'attachment; filename="{scan_id}.spdx.json"'},
+                headers={"Content-Disposition": f'attachment; filename="{safe_id}.spdx.json"'},
             )
         if fmt_l == "slsa":
             return JSONResponse(
                 content=render_slsa_provenance(report),
-                headers={"Content-Disposition": f'attachment; filename="{scan_id}.slsa.json"'},
+                headers={"Content-Disposition": f'attachment; filename="{safe_id}.slsa.json"'},
+            )
+        if fmt_l == "compliance":
+            from openguard.compliance import evaluate_compliance
+
+            return JSONResponse(
+                content=evaluate_compliance(report),
+                headers={"Content-Disposition": f'attachment; filename="{safe_id}_compliance.json"'},
             )
         if fmt_l == "badge":
             return Response(content=render_badge_svg(report), media_type="image/svg+xml")
@@ -400,7 +424,7 @@ def create_app(db_path: Optional[Path] = None) -> FastAPI:
             return Response(
                 content=report.model_dump_json(indent=2),
                 media_type="application/json; charset=utf-8",
-                headers={"Content-Disposition": f'attachment; filename="{scan_id}.json"'},
+                headers={"Content-Disposition": f'attachment; filename="{safe_id}.json"'},
             )
         raise HTTPException(status_code=400, detail=f"不支持的导出格式: {fmt}")
 

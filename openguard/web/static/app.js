@@ -63,6 +63,9 @@ async function initApp() {
     const res = await fetch('/api/health');
     const data = await res.json();
     $('health-pill').textContent = `在线 · v${data.version}`;
+    if ($('version-pill') && data.version) {
+      $('version-pill').textContent = `v${data.version}`;
+    }
   } catch {
     $('health-pill').textContent = '离线';
   }
@@ -213,7 +216,13 @@ function buildUnifiedIssues(report) {
 
   report.code_security_findings.forEach((cs) => {
     const rid = String(cs.rule_id || '');
-    const isSupplyCfg = rid.startsWith('OG-CI-') || rid.startsWith('OG-DOCKER-') || rid.startsWith('OG-AI-') || rid.startsWith('OG-IAC-');
+    const isSupplyCfg =
+      rid.startsWith('OG-CI-') ||
+      rid.startsWith('OG-DOCKER-') ||
+      rid.startsWith('OG-AI-') ||
+      rid.startsWith('OG-IAC-') ||
+      rid.startsWith('OG-ML-') ||
+      rid.startsWith('OG-HYG-');
     const pill = rid.startsWith('OG-CI-')
       ? 'CI/CD 供应链'
       : rid.startsWith('OG-DOCKER-')
@@ -222,6 +231,12 @@ function buildUnifiedIssues(report) {
       ? 'IAC 云原生'
       : rid.startsWith('OG-AI-')
       ? 'AI 安全/UNICODE'
+      : rid.startsWith('OG-ML-')
+      ? 'ML 模型安全'
+      : rid.startsWith('OG-HYG-')
+      ? '敏感产物卫生'
+      : rid.startsWith('OG-TAINT-')
+      ? '跨语句污点'
       : 'SAST';
     list.push({
       id: cs.id,
@@ -268,6 +283,8 @@ function renderReport(report) {
   $('exp-sarif').href = `/api/export/${sid}/sarif`;
   $('exp-cdx').href = `/api/export/${sid}/cyclonedx`;
   $('exp-spdx').href = `/api/export/${sid}/spdx`;
+  if ($('exp-slsa')) $('exp-slsa').href = `/api/export/${sid}/slsa`;
+  if ($('exp-compliance')) $('exp-compliance').href = `/api/export/${sid}/compliance`;
   $('exp-md').href = `/api/export/${sid}/md`;
   if ($('exp-pr')) $('exp-pr').href = `/api/export/${sid}/pr-comment`;
   $('exp-badge').href = `/api/export/${sid}/badge`;

@@ -98,10 +98,11 @@ class AuditConfig(BaseModel):
     weights: Dict[str, float] = Field(default_factory=lambda: dict(DEFAULT_WEIGHTS))
 
 
-def load_ignore_patterns(root_path: Path) -> List[str]:
+def load_ignore_patterns(root_path: str | Path) -> List[str]:
     """Load ignore patterns from `.openguardignore` if present."""
+    root = Path(root_path)
     patterns: List[str] = []
-    ignore_file = root_path / ".openguardignore"
+    ignore_file = root / ".openguardignore"
     if ignore_file.is_file():
         with ignore_file.open("r", encoding="utf-8", errors="replace") as f:
             for raw_line in f:
@@ -112,12 +113,13 @@ def load_ignore_patterns(root_path: Path) -> List[str]:
     return patterns
 
 
-def load_config(root_path: Path, config_path: Optional[Path] = None) -> AuditConfig:
+def load_config(root_path: str | Path, config_path: Optional[Path] = None) -> AuditConfig:
     """Load `.openguard.yml`/`.openguard.yaml` and `.openguardignore` from target repo."""
+    root = Path(root_path)
     cfg_data: Dict[str, Any] = {}
     candidates = [config_path] if config_path else [
-        root_path / ".openguard.yml",
-        root_path / ".openguard.yaml",
+        root / ".openguard.yml",
+        root / ".openguard.yaml",
     ]
     for candidate in candidates:
         if candidate and candidate.is_file():
@@ -128,7 +130,7 @@ def load_config(root_path: Path, config_path: Optional[Path] = None) -> AuditCon
             break
 
     config = AuditConfig(**{k: v for k, v in cfg_data.items() if k in AuditConfig.model_fields})
-    repo_ignores = load_ignore_patterns(root_path)
+    repo_ignores = load_ignore_patterns(root)
     if repo_ignores:
         merged = list(config.exclude_patterns)
         for pat in repo_ignores:

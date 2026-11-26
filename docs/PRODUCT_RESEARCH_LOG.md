@@ -421,3 +421,28 @@
 - `node --check openguard/web/static/app.js` 语法零错误；
 - 新增 `tests/test_v28_aibom_and_web_compliance.py`（2 项综合测试），全量单测增至 **121 / 121 通过**；
 - 自身审计：**100.0/100 (A+)**，**Quality Gate: PASSED**。
+
+---
+
+## Round #19 — 2026-11-26 21:00–21:12
+
+### 本轮重点（零 Bug 优先 + 校内 `git.hust.edu.cn` CI 加固 + 前后端/文档一致性打磨）
+- **跨版本与运行期边界缺陷排查**：逐项审查 `config.py`、`auditor.py`、`dependency_parser.py`、`license_analyzer.py`、`mcp_server.py`、`cli.py` 与 `hook_installer.py`，定位并修复以下潜在故障点：
+  1. `load_config(".")` 传入 `str` 时触发 `TypeError`；
+  2. `_audit_remote_repo()` 清理钩子使用 Python 3.12 专属 `onexc` 参数，在 `python:3.11-slim`（`.gitlab-ci.yml` 默认镜像）运行远程仓库清理时存在兼容风险；
+  3. 仅 Python 3.11+ 内置 `tomllib`，Python 3.10 环境缺少 `tomli` 回退；
+  4. `OpenGuardAuditor._audit_local_path()` 当外部传入 `AuditConfig` 时（如 `MCP Server` / `Web AutoFix` / `cli compliance`）未继承仓库 `.openguard.yml` 的 `policy` 与自定义规则，且存在原地修改 `self.base_config` 的隐患；
+  5. `HookInstaller.PRE_COMMIT_SCRIPT` 提示了不存在的 `--dry-run` 参数，且生成的 GitHub Actions 模板未锁定 40 位 Commit SHA；
+  6. `requirements.txt` 残留未被引用的 `python-docx` 依赖，拖慢校内 GitLab CI 容器冷启动。
+
+### 已落地改进
+1. **核心可靠性与跨 Python 3.10–3.14 兼容修复**：
+   - `load_config` / `load_ignore_patterns` 入口强制 `Path(root_path)`；`auditor.py` 新增 `_safe_rmtree()` 与无副作用 `model_copy(deep=True)` 配置合并；`dependency_parser.py` / `license_analyzer.py` / `pyproject.toml` 补齐 `tomli` 回退；
+   - `mcp_server.py` 与 `cli.py` 统一 UTF-8 `stdin/stdout/stderr` 编码保护、仓库配置加载及缺失路径优雅退出码 `2`。
+2. **校内 GitLab CI（`git.hust.edu.cn`）与 Web/文档一致性升级**：
+   - 移除 `requirements.txt` 冗余 `python-docx`，升级 `.gitlab-ci.yml` 增加 `openguard compliance . --offline --fail-on-noncompliant` 与 `openguard doctor .` 门禁；
+   - `web/app.py`、`index.html`、`app.js` 补全 `compliance` 导出、SLSA 菜单项、`allow_major` 透传、动态版本号徽章与 `OG-ML-`/`OG-HYG-`/`OG-TAINT-` 分类标签；同步刷新 `README.md` 与 `CHANGELOG.md`。
+
+### 验证结果
+- 新增 `tests/test_v29_reliability_compat_and_ci.py`（5 项回归测试），全量单测增至 **126 / 126 通过**；
+- `node --check openguard/web/static/app.js`、`openguard scan . --offline --fail-on high`（**100.0/100 (A+)**, **Quality Gate: PASSED**）、`openguard compliance . --offline --fail-on-noncompliant`（**8/8 COMPLIANT**）、`openguard doctor .` 全部通过。
