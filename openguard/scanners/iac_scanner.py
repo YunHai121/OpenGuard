@@ -38,8 +38,12 @@ SENSITIVE_EXACT_FILENAMES = frozenset({
     ".pypirc",
     ".netrc",
     ".htpasswd",
+    "privkey.pem",
+    "private.pem",
+    "private.key",
+    "id_rsa.key",
 })
-SENSITIVE_KEYSTORE_EXTS = (".p12", ".pfx", ".jks", ".keystore", ".ppk")
+SENSITIVE_KEYSTORE_EXTS = (".p12", ".pfx", ".jks", ".keystore", ".ppk", ".ovpn")
 SAFE_ENV_SUFFIXES = (".example", ".sample", ".template", ".dist", ".test", ".openguard.local")
 
 

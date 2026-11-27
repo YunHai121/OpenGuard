@@ -5,6 +5,9 @@ All notable changes to **OpenGuard (开源卫士)** are documented in this file 
 ## [Unreleased]
 
 ### Fixed & Hardened
+- **自动脱敏重构 RHS 精确定位与敏感私钥文件卫生加固（Round #23）**：
+  - 修复 `SecretRemediator` 处理 Python 字典/JSON 键值对（如 `"openai_api_key": "sk-..."`）时误将左侧键名当作密钥替换导致语法破坏的缺陷，并新增 `.env*` 未加引号凭据值的自动脱敏重构支持；
+  - 扩展 `IaCScanner` 敏感提交物防线（`OG-HYG-001`）覆盖 `privkey.pem`、`private.pem`、`private.key`、`id_rsa.key` 与 `*.ovpn`（继续放行 `ca.pem` 等公共证书）。
 - **多阶段 Dockerfile 审计、SQLite WAL 并发与 PDF 报告健壮性修复（Round #22）**：
   - 修复 `DockerfileScanner` 多阶段构建未在新 `FROM` 阶段重置 `USER` 导致最终 `root` 阶段漏报 `OG-DOCKER-002`、误报 `FROM <stage_alias>` 为未锁镜像以及带端口私有仓库（`registry:5000/org/app`）漏报 `OG-DOCKER-001` 的缺陷；
   - 为 `AuditHistoryStore` 启用 SQLite `WAL` 模式、`busy_timeout=5000` 与异常 `rollback()` 保护，提升 Web 并发读写稳定性；

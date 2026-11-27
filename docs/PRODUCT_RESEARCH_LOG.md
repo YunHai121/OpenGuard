@@ -486,3 +486,15 @@
 ### 验证结果
 - 新增 `tests/test_v32_dockerfile_storage_and_pdf.py`（3 项回归测试），全量单测增至 **134 / 134 通过**；
 - `node --check openguard/web/static/app.js`、自身审计 **100.0/100 (A+)**（**Quality Gate: PASSED**）、`openguard compliance . --offline --fail-on-noncompliant`（**8/8 COMPLIANT**）与 `openguard doctor .` 全部通过。
+
+---
+
+## Round #23 — 2026-11-27 12:28–13:34
+
+### 本轮重点（自动脱敏重构 RHS 修复 + 敏感私钥卫生扩展）
+1. **自动脱敏重构键名误替换 Bug 修复 (`remediation/secret_remediator.py`)**：此前正则首匹配导致 `"openai_api_key": "sk-..."` 中的键名被替换为 `os.getenv(...)`；现严格在 `:`/`=` 右侧定位值并支持 `.env` 未加引号凭据值重构。
+2. **敏感提交物防线扩展 (`scanners/iac_scanner.py`)**：`OG-HYG-001` 补充 `privkey.pem`、`private.pem`、`private.key`、`id_rsa.key` 与 `*.ovpn`，同时保持公共证书零误报。
+
+### 验证结果
+- 新增 `tests/test_v33_remediator_rhs_and_hygiene.py`（2 项回归测试），全量单测增至 **136 / 136 通过**；
+- `node --check openguard/web/static/app.js`、自身审计 **100.0/100 (A+)**（**Quality Gate: PASSED**）、`openguard compliance . --offline --fail-on-noncompliant`（**8/8 COMPLIANT**）与 `openguard doctor .` 全部通过。

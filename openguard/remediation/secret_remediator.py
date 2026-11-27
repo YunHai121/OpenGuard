@@ -112,38 +112,40 @@ class SecretRemediator:
                     var_name = f"{var_name}_{len(used_vars) + 1}"
                 used_vars.add(var_name)
 
-                # Replace quoted literal value on RHS of assignment
-                quoted_m = re.search(r"([\"'])([^\"'\n]{6,})\1", stripped_line)
-                if not quoted_m:
+                # Locate RHS after `=` or `:` so dict/JSON keys like `"api_key": "sk-..."` never get replaced
+                rhs_start = 0
+                sep_m = re.match(
+                    r"^\s*(?:export\s+|const\s+|let\s+|var\s+)?(?:[\"'][^\"'\n]+[\"']|[A-Za-z0-9_.\-\[\]\"']+)\s*[:=]\s*",
+                    stripped_line,
+                )
+                if sep_m:
+                    rhs_start = sep_m.end()
+
+                quoted_m = re.search(r"([\"'])([^\"'\n]{6,})\1", stripped_line[rhs_start:])
+                if quoted_m:
+                    val_start = rhs_start + quoted_m.start()
+                    val_end = rhs_start + quoted_m.end()
+                    original_literal_val = quoted_m.group(2)
+                elif fpath.name.lower().startswith(".env") and rhs_start > 0:
+                    unquoted_m = re.match(r"([^\s#]{6,})", stripped_line[rhs_start:])
+                    if not unquoted_m:
+                        continue
+                    val_start = rhs_start + unquoted_m.start()
+                    val_end = rhs_start + unquoted_m.end()
+                    original_literal_val = unquoted_m.group(1)
+                else:
                     continue
-                original_literal_val = quoted_m.group(2)
 
                 if is_py:
                     replacement_expr = f'os.getenv("{var_name}", "")'
-                    updated = (
-                        stripped_line[: quoted_m.start()]
-                        + replacement_expr
-                        + stripped_line[quoted_m.end():]
-                    )
+                    updated = stripped_line[:val_start] + replacement_expr + stripped_line[val_end:]
                 elif is_js:
                     replacement_expr = f'process.env.{var_name} || ""'
-                    updated = (
-                        stripped_line[: quoted_m.start()]
-                        + replacement_expr
-                        + stripped_line[quoted_m.end():]
-                    )
+                    updated = stripped_line[:val_start] + replacement_expr + stripped_line[val_end:]
                 elif fpath.name.lower().startswith(".env") or ext in (".yml", ".yaml"):
-                    updated = (
-                        stripped_line[: quoted_m.start()]
-                        + f'"${{{var_name}}}"'
-                        + stripped_line[quoted_m.end():]
-                    )
+                    updated = stripped_line[:val_start] + f'"${{{var_name}}}"' + stripped_line[val_end:]
                 else:
-                    updated = (
-                        stripped_line[: quoted_m.start()]
-                        + f'"${{{var_name}}}"'
-                        + stripped_line[quoted_m.end():]
-                    )
+                    updated = stripped_line[:val_start] + f'"${{{var_name}}}"' + stripped_line[val_end:]
 
                 new_lines[idx] = updated + line_ending
                 extracted_env[var_name] = original_literal_val
