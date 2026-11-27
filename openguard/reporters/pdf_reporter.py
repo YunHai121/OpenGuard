@@ -56,22 +56,19 @@ def _ensure_cjk_font() -> str:
 
 def _make_dimension_chart(report: AuditReport, font_name: str) -> Drawing:
     drawing = Drawing(460, 150)
+    dims = report.summary.dimensions
+    if not dims:
+        return drawing
     bc = VerticalBarChart()
     bc.x = 38
     bc.y = 28
     bc.height = 105
     bc.width = 400
-    bc.data = [[d.score for d in report.summary.dimensions]]
+    bc.data = [[d.score for d in dims]]
     bc.valueAxis.valueMin = 0
     bc.valueAxis.valueMax = 100
     bc.valueAxis.valueStep = 25
-    bc.categoryAxis.categoryNames = [
-        "密钥安全",
-        "供应链漏洞",
-        "许可证合规",
-        "代码安全",
-        "工程治理",
-    ]
+    bc.categoryAxis.categoryNames = [d.name for d in dims]
     bc.categoryAxis.labels.fontName = font_name
     bc.categoryAxis.labels.fontSize = 8
     bc.bars[0].fillColor = colors.HexColor("#4f46e5")
@@ -341,6 +338,40 @@ def render_pdf_bytes(report: AuditReport) -> bytes:
         )
     )
     story.append(gt)
+
+    # Compliance mapping summary
+    from openguard.compliance import evaluate_compliance
+
+    comp_data = evaluate_compliance(report)
+    story.append(
+        p(
+            f"七、国际供应链合规映射 ({comp_data['status']} · {comp_data['passed_count']}/{comp_data['total_controls']} · {comp_data['compliance_rate']:.1f}%)",
+            h2_style,
+        )
+    )
+    c_rows = [[p("编号"), p("合规控制项"), p("标准映射"), p("状态"), p("审计证据")]]
+    for c in comp_data["controls"]:
+        c_rows.append(
+            [
+                p(c["id"]),
+                p(c["name"]),
+                p(f"{c['eu_cra']} / {c['nist_ssdf']}"),
+                p(c["status"]),
+                p(c["evidence"]),
+            ]
+        )
+    ct = Table(c_rows, colWidths=[20 * mm, 42 * mm, 38 * mm, 14 * mm, 64 * mm])
+    ct.setStyle(
+        TableStyle(
+            [
+                ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#1e3a8a")),
+                ("TEXTCOLOR", (0, 0), (-1, 0), colors.white),
+                ("GRID", (0, 0), (-1, -1), 0.5, colors.HexColor("#cbd5e1")),
+                ("VALIGN", (0, 0), (-1, -1), "TOP"),
+            ]
+        )
+    )
+    story.append(ct)
 
     doc.build(story)
     return buf.getvalue()

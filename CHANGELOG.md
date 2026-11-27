@@ -5,6 +5,10 @@ All notable changes to **OpenGuard (开源卫士)** are documented in this file 
 ## [Unreleased]
 
 ### Fixed & Hardened
+- **多阶段 Dockerfile 审计、SQLite WAL 并发与 PDF 报告健壮性修复（Round #22）**：
+  - 修复 `DockerfileScanner` 多阶段构建未在新 `FROM` 阶段重置 `USER` 导致最终 `root` 阶段漏报 `OG-DOCKER-002`、误报 `FROM <stage_alias>` 为未锁镜像以及带端口私有仓库（`registry:5000/org/app`）漏报 `OG-DOCKER-001` 的缺陷；
+  - 为 `AuditHistoryStore` 启用 SQLite `WAL` 模式、`busy_timeout=5000` 与异常 `rollback()` 保护，提升 Web 并发读写稳定性；
+  - 修复 `pdf_reporter.py` 在 `dimensions` 为空时 ReportLab 图表崩溃的边界隐患，并在中文 PDF 报告新增第 7 节 **EU CRA / NIST SSDF / OWASP SCVS 国际供应链合规映射表**。
 - **CycloneDX `bom-ref` 一致性与 GitLab CI 安全规则加固（Round #21）**：
   - 修复 `render_cyclonedx()` 当组件缺少 `purl` 时 `dependencies[].dependsOn` / `vulnerabilities[].affects[].ref` 与 `components[].bom-ref` 不一致的缺陷，并更新 SARIF `informationUri` 为校内仓库地址；
   - 修复 `CIWorkflowScanner._scan_gitlab_ci()` 漏报未指定标签镜像（如 `image: python`，隐式等同 `:latest`）的问题，并补齐 GitLab CI `OG-CI-008`（`printenv | base64` / `env | base64` 日志凭据转储）检测。

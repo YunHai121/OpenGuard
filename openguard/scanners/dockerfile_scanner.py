@@ -11,7 +11,7 @@ from openguard.config import DEFAULT_EXCLUDE_DIRS, is_path_excluded
 from openguard.models import CodeSecurityFinding, Severity
 from openguard.utils.entropy import is_likely_placeholder
 
-FROM_RE = re.compile(r"^\s*FROM\s+(?:--platform=\S+\s+)?([^\s]+)", re.I)
+FROM_RE = re.compile(r"^\s*FROM\s+(?:--platform=\S+\s+)?([^\s]+)(?:\s+AS\s+([A-Za-z0-9_.\-]+))?", re.I)
 USER_RE = re.compile(r"^\s*USER\s+([^\s#]+)", re.I)
 ADD_URL_RE = re.compile(r"^\s*ADD\s+(?:--\S+\s+)*https?://", re.I)
 ENV_SECRET_RE = re.compile(
@@ -79,23 +79,33 @@ class DockerfileScanner:
         last_user: Optional[str] = None
         last_user_line: int = 1
         has_from = False
-        first_from_line = 1
+        last_stage_from_line = 1
+        stage_users: dict[str, Optional[str]] = {}
+        current_stage_alias: Optional[str] = None
 
         for idx, raw in enumerate(lines, start=1):
             stripped = raw.strip()
             if not stripped or stripped.startswith("#") or "openguard: ignore" in stripped.lower():
                 continue
 
-            # 1. FROM unpinned / :latest
+            # 1. FROM unpinned / :latest & multi-stage USER reset
             m_from = FROM_RE.match(raw)
             if m_from:
-                if not has_from:
-                    has_from = True
-                    first_from_line = idx
+                has_from = True
+                last_stage_from_line = idx
                 img = m_from.group(1)
-                if img.lower() != "scratch" and not img.startswith("$"):
+                alias = m_from.group(2)
+                img_key = img.lower()
+                is_prior_stage = img_key in stage_users
+                last_user = stage_users.get(img_key) if is_prior_stage else None
+                current_stage_alias = alias.lower() if alias else None
+                if current_stage_alias:
+                    stage_users[current_stage_alias] = last_user
+
+                if not is_prior_stage and img_key != "scratch" and not img.startswith("$"):
                     if "@sha256:" not in img:
-                        if ":" not in img or img.lower().endswith(":latest"):
+                        tail = img.rsplit("/", 1)[-1]
+                        if ":" not in tail or img_key.endswith(":latest"):
                             findings.append(
                                 CodeSecurityFinding(
                                     rule_id="OG-DOCKER-001",
@@ -115,6 +125,8 @@ class DockerfileScanner:
             if m_user:
                 last_user = m_user.group(1).strip().lower()
                 last_user_line = idx
+                if current_stage_alias:
+                    stage_users[current_stage_alias] = last_user
 
             # 3. RUN curl | sh
             if PIPE_SHELL_RE.search(raw):
@@ -186,6 +198,7 @@ class DockerfileScanner:
 
         # 6. Final stage running as root
         if has_from and (last_user is None or last_user in ("root", "0", "0:0", "root:root")):
+            target_line = last_user_line if last_user else last_stage_from_line
             findings.append(
                 CodeSecurityFinding(
                     rule_id="OG-DOCKER-002",
@@ -193,8 +206,8 @@ class DockerfileScanner:
                     cwe_id="CWE-250",
                     severity=Severity.HIGH,
                     file_path=rel,
-                    line_number=last_user_line if last_user else first_from_line,
-                    snippet=lines[(last_user_line if last_user else first_from_line) - 1].strip()[:180],
+                    line_number=target_line,
+                    snippet=lines[target_line - 1].strip()[:180],
                     description="Dockerfile 未切换非特权运行用户（默认以 `root` 身份运行），容器逃逸后风险极大。",
                     remediation="在最终阶段创建并切换至非 root 用户（如 `RUN useradd -r appuser && USER appuser`）。",
                 )

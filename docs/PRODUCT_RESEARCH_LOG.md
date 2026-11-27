@@ -471,3 +471,18 @@
 ### 验证结果
 - 新增 `tests/test_v31_sarif_sbom_and_gitlab_ci.py`（2 项回归测试），全量单测增至 **131 / 131 通过**；
 - `node --check openguard/web/static/app.js`、自身审计 **100.0/100 (A+)**（**Quality Gate: PASSED**）、`openguard compliance . --offline --fail-on-noncompliant`（**8/8 COMPLIANT**）与 `openguard doctor .` 全部通过。
+
+---
+
+## Round #22 — 2026-11-27 11:28–11:36
+
+### 本轮重点（多阶段 Dockerfile 精度修复 + SQLite WAL 并发加固 + PDF 合规映射章节）
+1. **多阶段 Dockerfile 误报/漏报修复 (`dockerfile_scanner.py`)**：
+   - 修复多阶段构建 `FROM stage1 AS builder` 切换至新阶段时沿用前序 `USER` 导致最终 `root` 阶段漏报 `OG-DOCKER-002` 的问题；支持记录 `AS <alias>` 阶段继承，避免 `FROM builder` 误报 `OG-DOCKER-001`；
+   - 修复带端口私有仓库地址（`FROM registry.internal:5000/org/app`）因镜像名含 `:` 导致未锁版本标签漏报 `OG-DOCKER-001` 的缺陷。
+2. **Web SQLite 并发与事务保护 (`web/storage.py`)**：启用 `journal_mode=WAL`、`busy_timeout=5000` 与异常自动 `rollback()`。
+3. **PDF 报告防崩溃与合规闭环 (`reporters/pdf_reporter.py`)**：修复空 `dimensions` 边界崩溃并动态对齐维度名，在中文 PDF 中新增第 7 节 **EU CRA / NIST SSDF / OWASP SCVS 合规映射摘要表**。
+
+### 验证结果
+- 新增 `tests/test_v32_dockerfile_storage_and_pdf.py`（3 项回归测试），全量单测增至 **134 / 134 通过**；
+- `node --check openguard/web/static/app.js`、自身审计 **100.0/100 (A+)**（**Quality Gate: PASSED**）、`openguard compliance . --offline --fail-on-noncompliant`（**8/8 COMPLIANT**）与 `openguard doctor .` 全部通过。
