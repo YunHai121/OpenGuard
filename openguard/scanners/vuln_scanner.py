@@ -555,6 +555,10 @@ class VulnScanner:
             low_name = comp.name.lower()
             if low_name in popular_list:
                 continue
+            if comp.ecosystem == "PyPI":
+                pep_norm = re.sub(r"[-_.]+", "-", low_name)
+                if pep_norm in {re.sub(r"[-_.]+", "-", p) for p in popular_list}:
+                    continue
             for pop in popular_list:
                 if abs(len(low_name) - len(pop)) > 2:
                     continue
@@ -613,20 +617,22 @@ class VulnScanner:
         if not queries:
             return []
 
+        results: List[Dict[str, Any]] = []
         try:
             try:
                 client_cm = httpx.Client(timeout=4.0)
             except httpx.InvalidURL:
                 client_cm = httpx.Client(timeout=4.0, trust_env=False)
             with client_cm as client:
-                resp = client.post(self.OSV_BATCH_URL, json={"queries": queries[:60]})
-                if resp.status_code != 200:
-                    return []
-                payload = resp.json()
+                for start in range(0, len(queries), 60):
+                    resp = client.post(self.OSV_BATCH_URL, json={"queries": queries[start : start + 60]})
+                    if resp.status_code != 200:
+                        return []
+                    payload = resp.json()
+                    results.extend(payload.get("results", []))
         except Exception:
             return []
 
-        results = payload.get("results", [])
         findings: List[VulnerabilityFinding] = []
         for comp, res in zip(indexed_comps, results):
             for vuln in (res.get("vulns") or [])[:3]:

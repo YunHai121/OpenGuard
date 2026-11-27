@@ -5,6 +5,9 @@ All notable changes to **OpenGuard (开源卫士)** are documented in this file 
 ## [Unreleased]
 
 ### Fixed & Hardened
+- **PyPI PEP 503 仿冒误报消除、OSV 分批查询与依赖修复路径防穿越（Round #25）**：
+  - 修复 `VulnScanner` 对 PyPI 等价命名（如 `python_dotenv` vs `python-dotenv`）误报为 1-编辑距离 Typosquatting 的问题，并将在线 `OSV.dev` 批量查询升级为按 60 组件自动分块遍历，避免大仓截断；
+  - 为 `DependencyRemediator` 补充 `fpath.is_relative_to(root)` 路径穿越防护。
 - **npm 内联/联动脚本链追踪与 Policy PEP 503 包名归一化（Round #24）**：
   - 扩展 `InstallScriptScanner` 支持拦截 `package.json` 生命周期钩子内的 `node -e` / `python -c` 高危内联执行，以及联动调用的本地 `.sh` / `.py` 窃密与 AI CLI 劫持脚本；
   - 修复 `PolicyEngine` `denied_packages` 未对 PyPI 包名执行 PEP 503（`-`/`_`/`.`）归一化导致策略绕过的边界缺陷。

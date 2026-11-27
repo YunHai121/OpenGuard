@@ -93,7 +93,7 @@ class DependencyRemediator:
 
         for rel_file in sorted(manifest_files.keys()):
             fpath = (root / rel_file).resolve()
-            if not fpath.is_file():
+            if not fpath.is_relative_to(root) or not fpath.is_file():
                 continue
             low_name = fpath.name.lower()
             original = fpath.read_text(encoding="utf-8", errors="replace")

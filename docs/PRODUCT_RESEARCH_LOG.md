@@ -512,3 +512,15 @@
 ### 验证结果
 - 新增 `tests/test_v34_install_script_and_policy_norm.py`（2 项回归测试），全量单测增至 **138 / 138 通过**；
 - `node --check openguard/web/static/app.js`、自身审计 **100.0/100 (A+)**（**Quality Gate: PASSED**）、`openguard compliance . --offline --fail-on-noncompliant`（**8/8 COMPLIANT**）与 `openguard doctor .` 全部通过。
+
+---
+
+## Round #25 — 2026-11-27 16:28–16:35
+
+### 本轮重点（Typosquatting 零误报修复 + OSV 分批扩容 + 依赖修复路径防穿越）
+1. **PyPI PEP 503 Typosquatting 误报消除与 OSV 分块查询 (`vuln_scanner.py`)**：避免 `python_dotenv` 等下划线合法包被误判为 `python-dotenv` 仿冒包，同时将 OSV 批量查询从硬截断 60 条升级为 60 条/批全量遍历。
+2. **依赖自动修复路径边界防护 (`dep_remediator.py`)**：校验 `fpath.is_relative_to(root)` 阻断异常 `source_file` 越界写入。
+
+### 验证结果
+- 新增 `tests/test_v35_vuln_typosquat_pep503_and_dep_guard.py`（2 项回归测试），全量单测增至 **140 / 140 通过**；
+- `node --check openguard/web/static/app.js`、自身审计 **100.0/100 (A+)**（**Quality Gate: PASSED**）、`openguard compliance . --offline --fail-on-noncompliant`（**8/8 COMPLIANT**）与 `openguard doctor .` 全部通过。
