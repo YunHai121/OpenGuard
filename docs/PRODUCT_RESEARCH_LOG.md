@@ -459,3 +459,15 @@
 ### 验证结果
 - 新增 `tests/test_v30_aibom_pickle_memo_and_web.py`（3 项回归测试），全量单测增至 **129 / 129 通过**；
 - `node --check openguard/web/static/app.js`、自身审计 **100.0/100 (A+)**（**Quality Gate: PASSED**）、`openguard compliance . --offline --fail-on-noncompliant`（**8/8 COMPLIANT**）与 `openguard doctor .` 全部通过。
+
+---
+
+## Round #21 — 2026-11-26 22:28–22:36
+
+### 本轮重点（SBOM `bom-ref` 一致性修复 + GitLab CI 防线补齐）
+1. **CycloneDX 1.5 `bom-ref` 引用一致性修复 (`sarif_sbom_reporter.py`)**：当组件无 `purl` 时，`render_cyclonedx()` 原先使用 `c.name` 构建 `comp_ref_by_name`，导致与 `components[].bom-ref`（`ecosystem:name@version`）脱节；现已统一引用映射，并更新 SARIF `informationUri` 至 `https://git.hust.edu.cn/U202414594/openguard`。
+2. **GitLab CI（`.gitlab-ci.yml`）检测盲区修复 (`ci_workflow_scanner.py`)**：修复 `_scan_gitlab_ci()` 对未写 `:latest` 的无标签镜像（如 `image: python`）漏报的问题（同时放行 `$CI_REGISTRY_IMAGE` 变量与带港口/域名路径的固定版本镜像），并补齐 `OG-CI-008` 构建日志凭据转储拦截。
+
+### 验证结果
+- 新增 `tests/test_v31_sarif_sbom_and_gitlab_ci.py`（2 项回归测试），全量单测增至 **131 / 131 通过**；
+- `node --check openguard/web/static/app.js`、自身审计 **100.0/100 (A+)**（**Quality Gate: PASSED**）、`openguard compliance . --offline --fail-on-noncompliant`（**8/8 COMPLIANT**）与 `openguard doctor .` 全部通过。

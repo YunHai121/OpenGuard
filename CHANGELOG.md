@@ -5,6 +5,9 @@ All notable changes to **OpenGuard (开源卫士)** are documented in this file 
 ## [Unreleased]
 
 ### Fixed & Hardened
+- **CycloneDX `bom-ref` 一致性与 GitLab CI 安全规则加固（Round #21）**：
+  - 修复 `render_cyclonedx()` 当组件缺少 `purl` 时 `dependencies[].dependsOn` / `vulnerabilities[].affects[].ref` 与 `components[].bom-ref` 不一致的缺陷，并更新 SARIF `informationUri` 为校内仓库地址；
+  - 修复 `CIWorkflowScanner._scan_gitlab_ci()` 漏报未指定标签镜像（如 `image: python`，隐式等同 `:latest`）的问题，并补齐 GitLab CI `OG-CI-008`（`printenv | base64` / `env | base64` 日志凭据转储）检测。
 - **ML Pickle 反序列化与 AIBOM 覆盖盲区修复（Round #20）**：
   - 修复 `MLModelScanner.inspect_pickle_bytes()` 未追踪 `MEMOIZE`/`BINPUT`/`BINGET` 备忘录操作码导致协议 4/5 备忘录混淆 `STACK_GLOBAL` 绕过的问题，并补充 `marshal.loads` / `types.FunctionType` 高危原语；
   - 修复 `aibom.py` 受默认 `*.bin` 排除规则影响跳过 `pytorch_model.bin` 等 PyTorch 二进制权重的问题，新增 PyTorch/Pickle `.bin` 头识别与 `grok-*` 模型支持。

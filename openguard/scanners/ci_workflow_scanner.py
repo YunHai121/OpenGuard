@@ -276,18 +276,37 @@ class CIWorkflowScanner:
                     )
                 )
 
-            if re.match(r"^\s*image\s*:\s*['\"]?[^'\":\s]+(?::latest)?['\"]?\s*$", raw, re.I):
-                if ":latest" in raw.lower():
+            if SECRET_LOG_DUMP_RE.search(raw):
+                findings.append(
+                    CodeSecurityFinding(
+                        rule_id="OG-CI-008",
+                        rule_name="GitLab CI Secret / Environment Dump to Build Logs",
+                        cwe_id="CWE-532",
+                        severity=Severity.HIGH,
+                        file_path=rel,
+                        line_number=idx,
+                        snippet=stripped[:180],
+                        description="GitLab CI 任务将环境变量编码后直接输出至构建日志，极易导致 CI/CD 变量泄露。",
+                        remediation="严禁在构建脚本中使用 `printenv | base64` 或 `env | base64` 打印敏感上下文。",
+                    )
+                )
+
+            m_img = re.match(r"^\s*image\s*:\s*['\"]?([^'\"#\s]+)['\"]?\s*(?:#.*)?$", raw, re.I)
+            if m_img:
+                img_ref = m_img.group(1)
+                if not img_ref.startswith("$") and (
+                    img_ref.lower().endswith(":latest") or ":" not in img_ref.rsplit("/", 1)[-1]
+                ):
                     findings.append(
                         CodeSecurityFinding(
                             rule_id="OG-CI-006",
-                            rule_name="Mutable :latest Container Image in GitLab CI",
+                            rule_name="Mutable :latest or Untagged Container Image in GitLab CI",
                             cwe_id="CWE-1104",
                             severity=Severity.MEDIUM,
                             file_path=rel,
                             line_number=idx,
                             snippet=stripped[:180],
-                            description="GitLab CI 使用了可变 `:latest` 基础镜像，无法保证构建可复现且可能自动拉取受污染镜像。",
+                            description=f"GitLab CI 使用了可变 `:latest` 或未指定标签的基础镜像 `{img_ref}`，无法保证构建可复现且可能自动拉取受污染镜像。",
                             remediation="锁定具体镜像版本标签或 `@sha256:` 摘要（如 `python:3.11-slim`）。",
                         )
                     )

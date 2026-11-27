@@ -109,7 +109,7 @@ def render_sarif(report: AuditReport) -> Dict[str, Any]:
                     "driver": {
                         "name": "OpenGuard",
                         "version": report.tool_version,
-                        "informationUri": "https://git.hust.edu.cn/",
+                        "informationUri": "https://git.hust.edu.cn/U202414594/openguard",
                         "rules": list(rules_map.values()),
                     }
                 },
@@ -124,8 +124,10 @@ def render_cyclonedx(report: AuditReport) -> Dict[str, Any]:
     components_json: List[Dict[str, Any]] = []
     deps_map: Dict[str, List[str]] = {}
 
+    comp_ref_by_name: Dict[str, str] = {}
     for comp in report.components:
         bom_ref = comp.purl or f"{comp.ecosystem}:{comp.name}@{comp.version}"
+        comp_ref_by_name.setdefault(comp.name, bom_ref)
         entry: Dict[str, Any] = {
             "type": "library",
             "bom-ref": bom_ref,
@@ -142,7 +144,6 @@ def render_cyclonedx(report: AuditReport) -> Dict[str, Any]:
             entry["licenses"] = [{"license": {"id": comp.license_id}}]
         components_json.append(entry)
 
-    comp_ref_by_name = {c.name: (c.purl or c.name) for c in report.components}
     for src, dst in report.dependency_edges:
         src_ref = comp_ref_by_name.get(src, src)
         dst_ref = comp_ref_by_name.get(dst, dst)
