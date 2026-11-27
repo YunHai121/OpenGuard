@@ -65,9 +65,19 @@ class ScoringEngine:
     """Computes transparent multi-dimensional compliance scores and remediation roadmaps."""
 
     def __init__(self, weights: Dict[str, float] | None = None) -> None:
-        raw_w = weights or DEFAULT_WEIGHTS
-        total_w = sum(raw_w.values()) or 1.0
-        self.weights = {k: v / total_w for k, v in raw_w.items()}
+        merged = dict(DEFAULT_WEIGHTS)
+        if weights:
+            for k, v in weights.items():
+                if k in merged:
+                    try:
+                        merged[k] = max(0.0, float(v))
+                    except (TypeError, ValueError):
+                        pass
+        total_w = sum(merged.values())
+        if total_w <= 0.0:
+            merged = dict(DEFAULT_WEIGHTS)
+            total_w = sum(merged.values())
+        self.weights = {k: v / total_w for k, v in merged.items()}
 
     def evaluate(
         self,

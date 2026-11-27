@@ -536,3 +536,15 @@
 ### 验证结果
 - 新增 `tests/test_v36_baseline_diff_and_portfolio_cfg.py`（2 项回归测试），全量单测增至 **142 / 142 通过**；
 - `node --check openguard/web/static/app.js`、自身审计 **100.0/100 (A+)**（**Quality Gate: PASSED**）、`openguard compliance . --offline --fail-on-noncompliant`（**8/8 COMPLIANT**）与 `openguard doctor .` 全部通过。
+
+---
+
+## Round #27 — 2026-11-27 18:28–18:35
+
+### 本轮重点（2025–2026 CVE Call-Graph 符号补全 + 评分权重边界保护）
+1. **Call-Graph 符号表扩展 (`reachability_analyzer.py`)**：补全 `CVE-2026-67319`/`67313`（Axios）与 `CVE-2025-55182`/`66478`（React RSC/Next.js）危险调用符号映射。
+2. **评分权重鲁棒性加固 (`scoring/engine.py`)**：与 `DEFAULT_WEIGHTS` 安全合并并拦截负权重/全零权重。
+
+### 验证结果
+- 新增 `tests/test_v37_reachability_2026_and_weights.py`（2 项回归测试），全量单测增至 **144 / 144 通过**；
+- `node --check openguard/web/static/app.js`、自身审计 **100.0/100 (A+)**（**Quality Gate: PASSED**）、`openguard compliance . --offline --fail-on-noncompliant`（**8/8 COMPLIANT**）与 `openguard doctor .` 全部通过。

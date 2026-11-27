@@ -5,6 +5,9 @@ All notable changes to **OpenGuard (开源卫士)** are documented in this file 
 ## [Unreleased]
 
 ### Fixed & Hardened
+- **2025–2026 CVE Call-Graph 可达性映射与评分权重边界保护（Round #27）**：
+  - 为 `ReachabilityAnalyzer.VULNERABLE_CVE_SYMBOLS` 补全 `CVE-2026-67319`/`CVE-2026-67313`（Axios）与 `CVE-2025-55182`/`CVE-2025-66478`（React RSC/Next.js）危险调用符号，精准触发函数级 `call_reachable` 与 CycloneDX VEX `exploitable` 研判；
+  - 加固 `ScoringEngine` 权重归一化逻辑，支持部分维度覆盖并防止负数或全零权重导致总分失真。
 - **Git Diff 增量行号解析与多仓批量审计配置继承修复（Round #26）**：
   - 修复 `baseline.get_git_diff_added_lines()` 在遇到已删除文件（`+++ /dev/null`）未重置 `current_file` 及 Windows 下中文路径八进制转义（补充 `-c core.quotepath=false`）的缺陷；
   - 修复 `PortfolioAuditor.audit_repositories()` 未加载各子仓库 `.openguard.yml` 完整配置（权重/阈值/策略）的问题。

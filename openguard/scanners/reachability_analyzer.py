@@ -53,6 +53,10 @@ VULNERABLE_CVE_SYMBOLS: Dict[str, Set[str]] = {
     "CVE-2023-30861": {"flask", "session"},
     "CVE-2024-27351": {"truncator", "truncatechars_html", "truncatewords_html"},
     "CVE-2023-45857": {"axios.get", "axios.post", "axios.request", "axios.create"},
+    "CVE-2026-67319": {"axios.get", "axios.post", "axios.request", "axios.create", "axios"},
+    "CVE-2026-67313": {"axios.get", "axios.post", "axios.request", "axios.create", "axios"},
+    "CVE-2025-55182": {"createfromfetch", "decodereply", "createfromreadablestream"},
+    "CVE-2025-66478": {"createfromfetch", "decodereply", "nextresponse"},
     "CVE-2024-29041": {"res.location", "res.redirect"},
 }
 
