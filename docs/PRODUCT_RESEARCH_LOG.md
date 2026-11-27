@@ -548,3 +548,15 @@
 ### 验证结果
 - 新增 `tests/test_v37_reachability_2026_and_weights.py`（2 项回归测试），全量单测增至 **144 / 144 通过**；
 - `node --check openguard/web/static/app.js`、自身审计 **100.0/100 (A+)**（**Quality Gate: PASSED**）、`openguard compliance . --offline --fail-on-noncompliant`（**8/8 COMPLIANT**）与 `openguard doctor .` 全部通过。
+
+---
+
+## Round #28 — 2026-11-27 19:28–19:35
+
+### 本轮重点（`loc_counter` Python 文档字符串统计与 `.github` 目录修复）
+1. **Python 三引号注释块精准闭合 (`utils/loc_counter.py`)**：修复 `("'''", '"""')` 分隔符不一致导致 `"""..."""` 未统计为注释、以及 `'''...'''` 无法闭合吞并后续有效代码行的缺陷。
+2. **`.github` 工作流计入有效统计**：将目录过滤 `not d.startswith(".git")` 改为 `d != ".git"`。
+
+### 验证结果
+- 新增 `tests/test_v38_loc_counter_docstrings.py`（2 项回归测试），全量单测增至 **146 / 146 通过**；
+- `node --check openguard/web/static/app.js`、自身审计 **100.0/100 (A+)**（**Quality Gate: PASSED**）、`openguard compliance . --offline --fail-on-noncompliant`（**8/8 COMPLIANT**）与 `openguard doctor .` 全部通过。

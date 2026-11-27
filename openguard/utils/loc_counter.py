@@ -65,13 +65,20 @@ def count_file_loc(file_path: Path) -> Dict[str, Any]:
 
             if len(block_markers) == 2:
                 b_start, b_end = block_markers
-                if b_start == b_end:
-                    # Python triple-quote block docstrings/comments
-                    if stripped.startswith(b_start):
+                if (b_start, b_end) == ("'''", '"""'):
+                    # Python triple-quote docstrings/comments (match exact opening delimiter)
+                    matched_delim = ""
+                    open_len = 0
+                    for prefix in ('r"""', "r'''", '"""', "'''"):
+                        if stripped.startswith(prefix):
+                            matched_delim = prefix[-3:]
+                            open_len = len(prefix)
+                            break
+                    if matched_delim:
                         comment += 1
-                        if stripped.count(b_start) == 1:
+                        if matched_delim not in stripped[open_len:]:
                             in_block = True
-                            block_end = b_end
+                            block_end = matched_delim
                         continue
                 else:
                     if stripped.startswith(b_start):
@@ -109,7 +116,7 @@ def count_repository_loc(
     )
 
     for dirpath, dirnames, filenames in os.walk(root):
-        dirnames[:] = sorted(d for d in dirnames if d not in excluded_dir_set and not d.startswith(".git"))
+        dirnames[:] = sorted(d for d in dirnames if d not in excluded_dir_set and d != ".git")
         rel_dir = Path(dirpath).resolve().relative_to(root).as_posix()
         if rel_dir != "." and any(rel_dir == pref or rel_dir.startswith(pref + "/") for pref in subpath_prefixes):
             dirnames[:] = []

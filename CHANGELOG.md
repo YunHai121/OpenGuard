@@ -5,6 +5,9 @@ All notable changes to **OpenGuard (开源卫士)** are documented in this file 
 ## [Unreleased]
 
 ### Fixed & Hardened
+- **`openguard cloc` Python 三引号文档字符串与 `.github` 目录统计修复（Round #28）**：
+  - 修复 `loc_counter.count_file_loc()` 因 `("'''", '"""')` 起始/结束符判定逻辑缺陷导致 `"""..."""` 文档字符串未计入注释行及 `'''...'''` 多行文档字符串无法闭合的统计错误；
+  - 修复 `count_repository_loc()` 使用 `not d.startswith(".git")` 误跳过 `.github/workflows` 的问题（改为精确排除 `.git`）。
 - **2025–2026 CVE Call-Graph 可达性映射与评分权重边界保护（Round #27）**：
   - 为 `ReachabilityAnalyzer.VULNERABLE_CVE_SYMBOLS` 补全 `CVE-2026-67319`/`CVE-2026-67313`（Axios）与 `CVE-2025-55182`/`CVE-2025-66478`（React RSC/Next.js）危险调用符号，精准触发函数级 `call_reachable` 与 CycloneDX VEX `exploitable` 研判；
   - 加固 `ScoringEngine` 权重归一化逻辑，支持部分维度覆盖并防止负数或全零权重导致总分失真。
