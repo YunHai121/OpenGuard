@@ -498,3 +498,17 @@
 ### 验证结果
 - 新增 `tests/test_v33_remediator_rhs_and_hygiene.py`（2 项回归测试），全量单测增至 **136 / 136 通过**；
 - `node --check openguard/web/static/app.js`、自身审计 **100.0/100 (A+)**（**Quality Gate: PASSED**）、`openguard compliance . --offline --fail-on-noncompliant`（**8/8 COMPLIANT**）与 `openguard doctor .` 全部通过。
+
+---
+
+## Round #24 — 2026-11-27 15:28–15:35
+
+### 本轮重点（npm 生命周期脚本全链路追踪 + Policy-as-Code PEP 503 归一化）
+1. **npm 安装脚本跨语言联动追踪 (`install_script_scanner.py`)**：
+   - `NPM_SCRIPT_PATTERNS` 新增 `node -e` / `python -c` 高危内联子进程/下载执行拦截；
+   - 联动脚本追踪从 `.js/.cjs/.mjs` 扩展至 `.sh` / `.py`（覆盖 `sh ./setup.sh`、`python install.py` 等绕过模式）。
+2. **Policy-as-Code PEP 503 归一化修复 (`policy_engine.py`)**：修复 `policy.denied_packages` 中 `evil_pkg` 与清单 `evil-pkg` 因分隔符差异未命中阻断的缺陷。
+
+### 验证结果
+- 新增 `tests/test_v34_install_script_and_policy_norm.py`（2 项回归测试），全量单测增至 **138 / 138 通过**；
+- `node --check openguard/web/static/app.js`、自身审计 **100.0/100 (A+)**（**Quality Gate: PASSED**）、`openguard compliance . --offline --fail-on-noncompliant`（**8/8 COMPLIANT**）与 `openguard doctor .` 全部通过。

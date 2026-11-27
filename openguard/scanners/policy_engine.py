@@ -180,7 +180,8 @@ class PolicyEngine:
 
         denied_licenses = {str(x).strip().upper() for x in (policy.get("denied_licenses") or []) if str(x).strip()}
         allowed_licenses = {str(x).strip().upper() for x in (policy.get("allowed_licenses") or []) if str(x).strip()}
-        denied_packages = {str(x).strip().lower() for x in (policy.get("denied_packages") or []) if str(x).strip()}
+        raw_denied_pkgs = [str(x).strip().lower() for x in (policy.get("denied_packages") or []) if str(x).strip()]
+        denied_packages = set(raw_denied_pkgs) | {re.sub(r"[-_.]+", "-", p) for p in raw_denied_pkgs}
 
         existing_by_key = {(lc.component_name.lower(), lc.component_license.upper()): lc for lc in existing_license_conflicts}
         new_lic_conflicts: List[LicenseConflict] = []
@@ -234,8 +235,9 @@ class PolicyEngine:
                     existing_by_key[lic_key] = lc
                     new_lic_conflicts.append(lc)
 
-            # 3. Banned Package Denylist
-            if comp.name.lower() in denied_packages:
+            # 3. Banned Package Denylist (supports PEP 503 `-`/`_`/`.` equivalence)
+            comp_norm = re.sub(r"[-_.]+", "-", comp.name.lower())
+            if comp.name.lower() in denied_packages or (comp.ecosystem == "PyPI" and comp_norm in denied_packages):
                 policy_pkg_blocks.append(
                     VulnerabilityFinding(
                         id=f"OG-POLICY-PKG-{comp.name.upper()}",

@@ -35,8 +35,13 @@ NPM_SCRIPT_PATTERNS: List[Tuple[str, Severity, float, re.Pattern[str], str]] = [
         "OG-SUP-NPM-002",
         Severity.HIGH,
         8.2,
-        re.compile(r"(?:base64\s+-d|Buffer\.from\([^)]+,\s*['\"]base64['\"]\)|\beval\s*\()", re.I),
-        "npm 安装脚本包含 Base64 解码或动态 eval 执行逻辑，存在混淆恶意代码风险。",
+        re.compile(
+            r"(?:base64\s+-d|Buffer\.from\([^)]+,\s*['\"]base64['\"]\)|\beval\s*\(|"
+            r"\bnode\s+-e\s+['\"][^\n]*(?:child_process|execSync|exec\(|fetch\()|"
+            r"\bpython3?\s+-c\s+['\"][^\n]*(?:os\.system|subprocess|urllib|exec\())",
+            re.I,
+        ),
+        "npm 安装脚本包含 Base64 解码、动态 eval 或内联 `node -e` / `python -c` 高危执行逻辑，存在混淆恶意代码风险。",
     ),
     (
         "OG-SUP-NPM-003",
@@ -63,7 +68,9 @@ EXFIL_SINK_RE = re.compile(
     r"\bfetch\s*\(|https?\.request\s*\(|axios\.post\s*\(|https?://\d{1,3}(?:\.\d{1,3}){3})",
     re.I,
 )
-NODE_LOCAL_SCRIPT_RE = re.compile(r"\bnode\s+['\"]?(\.?/?[A-Za-z0-9_.\-/]+\.(?:c|m)?js)['\"]?")
+NODE_LOCAL_SCRIPT_RE = re.compile(
+    r"\b(?:node|sh|bash|python3?)\s+['\"]?(\.?/?[A-Za-z0-9_.\-/]+\.(?:(?:c|m)?js|sh|py))['\"]?"
+)
 PTH_EXEC_IMPORT_RE = re.compile(r"^\s*import\s+\S+")
 PTH_HIGH_RISK_RE = re.compile(r"(?:\bexec\s*\(|\beval\s*\(|__import__|base64|subprocess|urllib|socket|os\.system)", re.I)
 PY_CRED_INDICATOR_RE = re.compile(
@@ -227,7 +234,9 @@ class InstallScriptScanner:
                             import_locations=[rel, js_rel],
                         )
                     )
-                elif CRED_HARVEST_RE.search(js_body) and EXFIL_SINK_RE.search(js_body):
+                elif (CRED_HARVEST_RE.search(js_body) or PY_CRED_INDICATOR_RE.search(js_body)) and (
+                    EXFIL_SINK_RE.search(js_body) or "curl " in js_body.lower() or "urllib" in js_body.lower()
+                ):
                     findings.append(
                         VulnerabilityFinding(
                             id="OG-SUP-NPM-005",

@@ -5,6 +5,9 @@ All notable changes to **OpenGuard (开源卫士)** are documented in this file 
 ## [Unreleased]
 
 ### Fixed & Hardened
+- **npm 内联/联动脚本链追踪与 Policy PEP 503 包名归一化（Round #24）**：
+  - 扩展 `InstallScriptScanner` 支持拦截 `package.json` 生命周期钩子内的 `node -e` / `python -c` 高危内联执行，以及联动调用的本地 `.sh` / `.py` 窃密与 AI CLI 劫持脚本；
+  - 修复 `PolicyEngine` `denied_packages` 未对 PyPI 包名执行 PEP 503（`-`/`_`/`.`）归一化导致策略绕过的边界缺陷。
 - **自动脱敏重构 RHS 精确定位与敏感私钥文件卫生加固（Round #23）**：
   - 修复 `SecretRemediator` 处理 Python 字典/JSON 键值对（如 `"openai_api_key": "sk-..."`）时误将左侧键名当作密钥替换导致语法破坏的缺陷，并新增 `.env*` 未加引号凭据值的自动脱敏重构支持；
   - 扩展 `IaCScanner` 敏感提交物防线（`OG-HYG-001`）覆盖 `privkey.pem`、`private.pem`、`private.key`、`id_rsa.key` 与 `*.ovpn`（继续放行 `ca.pem` 等公共证书）。
