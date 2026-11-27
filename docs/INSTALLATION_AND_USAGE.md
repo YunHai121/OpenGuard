@@ -1,4 +1,4 @@
-# OpenGuard 安装、运行与第三方集成使用文档 (v1.3+)
+# OpenGuard 安装、运行与第三方集成使用文档 (v1.5.0)
 
 ## 1. 环境要求与安装
 
@@ -9,8 +9,9 @@
 ### 本地源码安装
 
 ```bash
-git clone https://github.com/YunHai121/OpenGuard.git
-cd OpenGuard
+git clone https://git.hust.edu.cn/U202414594/openguard.git
+# 或从 GitHub 克隆: git clone https://github.com/YunHai121/OpenGuard.git
+cd openguard
 pip install -r requirements.txt
 pip install -e . --no-build-isolation --no-deps
 ```
@@ -65,8 +66,11 @@ openguard scan examples/vulnerable_demo_repo --offline --format all --output dem
 ### 2.3 一键脱敏重构、安全依赖升级与文档补齐 (`autofix`)
 
 ```bash
-# 默认 Dry-Run 预览 Unified Diff（支持密钥剥离、CVE 依赖升级、规范文档补齐）
+# 默认 Dry-Run 预览 Unified Diff（支持密钥剥离、6 生态 CVE 依赖升级、规范文档补齐）
 openguard autofix path/to/repo --secrets --deps --docs --license MIT
+
+# 仅执行安全补丁升级，跳过跨主版本破坏性变更 (--no-major)
+openguard autofix path/to/repo --deps --no-major --apply
 
 # 确认写入修改（自动备份原文件至 .openguard_backup/ 并生成 .env.example）
 openguard autofix path/to/repo --secrets --deps --docs --license MulanPSL-2.0 --apply
@@ -88,6 +92,10 @@ openguard sbom-score . --min-score 8.0
 # 生成与校验 in-toto v1 / SLSA Provenance v1.0 供应链完整度证明
 openguard attest generate . -o slsa_provenance.json
 openguard attest verify slsa_provenance.json --repo .
+
+# 输出 EU CRA / NIST SSDF / OWASP SCVS 8 项国际监管合规映射与 CycloneDX 1.6 AIBOM
+openguard compliance . --offline --fail-on-noncompliant
+openguard aibom . -o aibom.cdx.json
 ```
 
 ### 2.5 组织/竞赛级多仓批量审计 (`batch`)
@@ -120,7 +128,7 @@ openguard benchmark --output-dir benchmarks
 
 ## 3. AI 编程助手 MCP Server 接入 (`openguard mcp`)
 
-OpenGuard 内置零额外依赖的 JSON-RPC 2.0 stdio **MCP Server**（暴露 `audit_repository`、`audit_code_snippet`、`check_package_safety`、`generate_pr_comment`、`diagnose_repo_posture`、`evaluate_sbom_quality` 6 项工具），可在 Claude Code / Cursor / Antigravity 的 `mcp.json` 中一键配置：
+OpenGuard 内置零额外依赖的 JSON-RPC 2.0 stdio **MCP Server**（暴露 `audit_repository`、`audit_code_snippet`、`check_package_safety`、`generate_pr_comment`、`diagnose_repo_posture`、`evaluate_sbom_quality`、`evaluate_compliance` 7 项工具），可在 Claude Code / Cursor / Antigravity 的 `mcp.json` 中一键配置：
 
 ```json
 {

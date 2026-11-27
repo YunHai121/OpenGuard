@@ -4,7 +4,7 @@ from openguard.auditor import OpenGuardAuditor
 from openguard.config import AuditConfig
 from openguard.models import AuditReport, Severity
 
-__version__ = "1.4.0"
+__version__ = "1.5.0"
 
 __all__ = [
     "AuditConfig",

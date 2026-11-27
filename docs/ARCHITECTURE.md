@@ -1,4 +1,4 @@
-# OpenGuard 系统架构与核心算法说明 (v1.3+)
+# OpenGuard 系统架构与核心算法说明 (v1.5.0)
 
 ## 1. 总体分层架构
 
@@ -15,13 +15,13 @@ flowchart TD
         S4["SPDX 许可证冲突传播推导\n(含 MulanPSL-2.0 & Policy-as-Code)"]
         S5["CVE 漏洞库(离线+OSV) + CISA KEV/EPSS\n+ Call-Graph 可达性 + 仿冒/安装脚本防线"]
         S6["7 语言 SAST + Python/JS 跨语句污点分析"]
-        S7["云原生与 AI 时代防线\n(CI/CD · Dockerfile · IaC · AI Rules/Unicode/MCP)"]
-        S8["开源工程规范与治理体检"]
+        S7["云原生与 AI 时代防线\n(CI/CD · Dockerfile · IaC · ML 模型反汇编 · AI Rules/Unicode/MCP)"]
+        S8["开源工程规范与 EU CRA / NIST SSDF 合规映射"]
     end
     Engines --> Policy["Policy-as-Code 策略引擎 & 基线过滤 (.openguard/rules/*.yml · --baseline)"]
     Policy --> Scoring["五维加权评分与质量门禁 (openguard.scoring)"]
-    Policy --> Remediate["自动修复引擎：密钥脱敏 / CVE 依赖升级 / 规范文档 (openguard.remediation)"]
-    Scoring --> Deliver["多模态输出：Rich CLI (--json/init/doctor/batch/sbom-diff/sbom-score) · FastAPI Web · MCP Server · PDF/HTML/SARIF/CycloneDX VEX/SPDX/SLSA v1.0"]
+    Policy --> Remediate["自动修复引擎：密钥脱敏 / 6 生态依赖升级 / 规范文档 (openguard.remediation)"]
+    Scoring --> Deliver["多模态输出：CLI (init/doctor/batch/compliance/aibom) · FastAPI Web (WAL) · 7-Tool MCP · 10 格式报告"]
 ```
 
 ## 2. 关键核心算法与工程设计
@@ -30,7 +30,7 @@ flowchart TD
 
 传统开源密钥扫描器在真实仓库中容易产生大量误报（文档示例、测试夹具、`re.compile(...)` 规则自身、SHA256 摘要或 UUID）。OpenGuard 设计了三阶递进流水线并结合最新离线校验算法：
 
-1. **第一阶（指纹匹配与确定性数学校验）**：匹配 46+ 条覆盖云厂商、大模型平台、代码托管、国内 IM Webhook（飞书/钉钉/企微）、私钥与数据库的规则（含 GitLab 17+ Routable Token `OG-SEC-021`）；对结构化凭据执行确定性离线校验：
+1. **第一阶（指纹匹配与确定性数学校验）**：匹配 **54 条**覆盖云厂商、大模型平台（OpenAI / Anthropic / OpenRouter / xAI Grok / Perplexity / LangSmith / DeepSeek / 通义千问 / 豆包 Ark）、Supabase（自动解码 JWT 载荷区分高危 `service_role` 与客户端公开 `anon` 零误报）、代码托管、国内 IM Webhook（飞书/钉钉/企微）、私钥与数据库的规则（含 GitLab 17+ Routable Token `OG-SEC-021`）；对结构化凭据执行确定性离线校验：
    - **GitHub / npm Token Base62 CRC32 校验**（`validate_github_token_crc32`，直接过滤随机伪造的 `ghp_`/`gho_`/`ghu_`/`ghs_`/`ghr_`/`npm_` 假密钥）；
    - **JWT Base64 JSON 头解析**、**18 位身份证 ISO 7064 MOD 11-2**、**银行卡 Luhn 校验**。
 2. **第二阶（信息熵与占位符剔除）**：计算候选串 Shannon 信息熵 $H(X) = -\sum p_i \log_2 p_i$ 与字符类别多样性，剔除低熵重复串、占位符词根（`placeholder`、`example`、`your_`、`changeme`）、UUID 与纯十六进制摘要。
@@ -54,8 +54,9 @@ flowchart TD
   - Python AST 安全扫描与 `PythonTaintAnalyzer`（`OG-TAINT-PY-001`–`004`：SQLi/RCE/SSRF/Path Traversal + 净化函数识别）；
   - JavaScript/TypeScript `JSTaintAnalyzer`（`OG-TAINT-JS-001`–`005`：RCE/XSS/SSRF/Path Traversal/Prototype Pollution）；
   - Go（`OG-SAST-GO-001`–`003`）、Java（`OG-SAST-JAVA-001`–`003`）、C/C++（`OG-SAST-CPP-001`–`002`）、Rust（`OG-SAST-RS-001`–`003`，识别 `// SAFETY:` 契约注释）。
-- **AI 时代规则投毒防线 (`AIConfigSecurityScanner`)**：检测隐藏 Unicode Tag（`U+E0000`–`U+E007F` 自动解码还原载荷 `OG-AI-001`）、Trojan Source BiDi/零宽字符集群（`OG-AI-002`）、`.cursorrules`/`CLAUDE.md`/`AGENTS.md` 提示词注入（`OG-AI-003`）与 `.mcp.json` 危险命令投毒（`OG-AI-004`）。
-- **CI/CD、容器与 IaC 安全扫描**：覆盖 GitHub Actions 工作流脚本注入与未 Pin SHA 动作（`OG-CI-001`–`006`）、Dockerfile 特权/硬编码密钥/浮动标签（`OG-DOCKER-001`–`005`）、Docker Compose / Kubernetes YAML / Terraform HCL（`OG-IAC-001`–`009`）。
+- **AI 时代规则投毒与 ML 模型反序列化防线 (`AIConfigSecurityScanner` + `MLModelScanner` + `aibom`)**：检测隐藏 Unicode Tag（`U+E0000`–`U+E007F` 自动解码还原载荷 `OG-AI-001`）、Trojan Source BiDi/零宽字符集群（`OG-AI-002`）、`.cursorrules`/`CLAUDE.md`/`AGENTS.md` 提示词注入（`OG-AI-003`）与 `.mcp.json` 危险命令投毒（`OG-AI-004`）；通过 `pickletools.genops()`（含协议 4/5 备忘录 `STACK_GLOBAL` 追踪）零执行反汇编 `*.pkl`/`*.pt`/`*.bin` 模型权重（`OG-ML-001`）并静态生成 **CycloneDX 1.6 AIBOM / ML-BOM**。
+- **CI/CD、容器与 IaC 安全扫描**：覆盖 GitHub Actions / GitLab CI（`tj-actions` 投毒告警 `OG-CI-007`、日志凭据转储 `OG-CI-008`、未锁定镜像/Action 等 `OG-CI-001`–`008`）、多阶段 Dockerfile 审计与凭据拷贝阻断（`OG-DOCKER-001`–`006`）、Docker Compose / Kubernetes YAML / Terraform HCL（`OG-IAC-001`–`009`）及敏感提交物卫生守卫（`OG-HYG-001`–`002`）。
+- **国际监管合规映射与 7 工具 MCP Server (`compliance.py` + `mcp_server.py`)**：通过 `openguard compliance` 将扫描与 VEX 证据映射为 **EU CRA / NIST SSDF / OWASP SCVS** 8 项控制矩阵；内置 **7 工具** MCP Server 新增 `evaluate_compliance`。
 
 ### 2.5 Policy-as-Code、SLSA v1.0 供应链证明与开发者体验 (DX)
 

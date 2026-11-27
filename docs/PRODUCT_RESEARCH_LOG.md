@@ -596,3 +596,18 @@
 ### 验证结果
 - 新增 `tests/test_v41_staged_only_and_html_labels.py`（2 项回归测试），全量单测增至 **151 / 151 通过**；
 - `node --check openguard/web/static/app.js`、自身审计 **100.0/100 (A+)**（**Quality Gate: PASSED**）、`openguard compliance . --offline --fail-on-noncompliant`（**8/8 COMPLIANT**）与 `openguard doctor .` 全部通过。
+
+---
+
+## Round #32 — 2026-11-27 23:28–23:38 (`v1.5.0` 正式版本发布)
+
+### 本轮重点（正式发布 `v1.5.0` + 缺陷台账/架构/使用文档全面对齐）
+1. **版本号正式升级至 `1.5.0`**：同步更新 `openguard/__init__.py`、`pyproject.toml`、`index.html`、`README.md` 与 `CHANGELOG.md`（将 Rounds #14–#31 的稳定性加固、EU CRA/NIST SSDF 合规映射、ML Pickle 静态反汇编与 CycloneDX 1.6 AIBOM 正式归纳为 `v1.5.0` 里程碑）。
+2. **评审文档与缺陷闭环台账更新**：
+   - `docs/ISSUE_RESOLUTION_LOG.md` 补充 `ISS-006`–`ISS-015` 共 10 项跨版本/准确性/安全边界缺陷根因与回归验证记录；
+   - `docs/ARCHITECTURE.md` 与 `docs/INSTALLATION_AND_USAGE.md` 全面升级至 `v1.5.0` 口径，补充校内 `git.hust.edu.cn` 克隆优先指引、`compliance`/`aibom`/`--no-major` 用法及 7 工具 MCP 列表；
+   - 刷新 `docs/assets/openguard_badge.svg` 徽章并打上 Git Tag `v1.5.0` 双仓同步推送。
+
+### 验证结果
+- `python -m unittest discover -s tests -v`：**151 / 151 通过**；
+- `node --check openguard/web/static/app.js`、`openguard scan . --offline --fail-on high`（**100.0/100 (A+)**, **Quality Gate: PASSED**）、`openguard compliance . --offline --fail-on-noncompliant`（**8/8 COMPLIANT**）、`openguard doctor .`（`v1.5.0`, `ERROR=0`）与 `python examples/third_party_ci_integration.py` 全部通过。

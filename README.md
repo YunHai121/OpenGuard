@@ -128,7 +128,7 @@ openguard hook ci path/to/your_repo --ci-platform gitlab
 ```yaml
 repos:
   - repo: https://github.com/YunHai121/OpenGuard
-    rev: v1.4.0
+    rev: v1.5.0
     hooks:
       - id: openguard-staged
 ```

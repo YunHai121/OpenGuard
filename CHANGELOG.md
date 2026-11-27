@@ -4,6 +4,8 @@ All notable changes to **OpenGuard (开源卫士)** are documented in this file 
 
 ## [Unreleased]
 
+## [1.5.0] - 2026-11-27
+
 ### Fixed & Hardened
 - **`--staged` 暂存区增量审计生效修复与 HTML 报告分类标签完善（Round #31）**：
   - 修复 `OpenGuardAuditor._audit_local_path()` 未消费 `cfg.staged_only` 导致 `openguard scan . --staged`（含 `pre-commit` 钩子）全量扫描工作区而非仅拦截暂存区变更的核心缺陷；
