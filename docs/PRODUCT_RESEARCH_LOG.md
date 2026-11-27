@@ -584,3 +584,15 @@
 ### 验证结果
 - 新增 `tests/test_v40_git_history_quotepath_and_docgen.py`（2 项回归测试），全量单测增至 **149 / 149 通过**；
 - `node --check openguard/web/static/app.js`、自身审计 **100.0/100 (A+)**（**Quality Gate: PASSED**）、`openguard compliance . --offline --fail-on-noncompliant`（**8/8 COMPLIANT**）与 `openguard doctor .` 全部通过。
+
+---
+
+## Round #31 — 2026-11-27 22:28–22:36
+
+### 本轮重点（`--staged` 暂存区门禁核心修复 + HTML 分类徽章补全）
+1. **`--staged` 增量审计接线修复 (`auditor.py` + `secret_scanner.py`)**：修复 `cfg.staged_only` 未在 `_audit_local_path()` 中触发暂存区 `git diff` 过滤的缺陷，使 `pre-commit` 与 `openguard scan . --staged` 真正只拦截暂存区变更。
+2. **HTML 报告分类标签对齐 (`reporters/html_reporter.py`)**：补全 `ML 模型安全`（`OG-ML-`）与 `敏感产物卫生`（`OG-HYG-`）。
+
+### 验证结果
+- 新增 `tests/test_v41_staged_only_and_html_labels.py`（2 项回归测试），全量单测增至 **151 / 151 通过**；
+- `node --check openguard/web/static/app.js`、自身审计 **100.0/100 (A+)**（**Quality Gate: PASSED**）、`openguard compliance . --offline --fail-on-noncompliant`（**8/8 COMPLIANT**）与 `openguard doctor .` 全部通过。

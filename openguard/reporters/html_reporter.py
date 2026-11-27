@@ -125,7 +125,19 @@ def render_html_report(report: AuditReport) -> str:
                     else (
                         "AI 安全"
                         if rid.startswith("OG-AI-")
-                        else ("污点追踪" if rid.startswith("OG-TAINT-") else ("自定义策略" if not rid.startswith("OG-SAST-") else "SAST"))
+                        else (
+                            "ML 模型安全"
+                            if rid.startswith("OG-ML-")
+                            else (
+                                "敏感产物卫生"
+                                if rid.startswith("OG-HYG-")
+                                else (
+                                    "污点追踪"
+                                    if rid.startswith("OG-TAINT-")
+                                    else ("自定义策略" if not rid.startswith("OG-SAST-") else "SAST")
+                                )
+                            )
+                        )
                     )
                 )
             )

@@ -260,13 +260,17 @@ class SecretScanner:
 
             content: Optional[str] = None
             if staged:
-                res = subprocess.run(
-                    ["git", "show", f":{rel_file}"],
-                    cwd=str(repo_path),
-                    capture_output=True,
-                )
-                if res.returncode == 0 and b"\x00" not in res.stdout[:4096]:
-                    content = res.stdout.decode("utf-8", errors="replace")
+                try:
+                    res = subprocess.run(
+                        ["git", "show", f":{rel_file}"],
+                        cwd=str(repo_path),
+                        capture_output=True,
+                        timeout=15,
+                    )
+                    if res.returncode == 0 and b"\x00" not in res.stdout[:4096]:
+                        content = res.stdout.decode("utf-8", errors="replace")
+                except Exception:
+                    pass
 
             if content is None:
                 fpath = (repo_path / rel_file).resolve()

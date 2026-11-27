@@ -128,17 +128,22 @@ class OpenGuardAuditor:
         else:
             cfg = load_config(repo_root, config_path=config_path)
 
-        # 0. Optional Diff-Aware Incremental Scope (--diff <base_ref>)
+        # 0. Optional Staged / Diff-Aware Incremental Scope (--staged or --diff <base_ref>)
+        staged_mode = bool(cfg.staged_only and not resolved.is_file())
         diff_added_map = (
-            get_git_diff_added_lines(repo_root, base_ref=cfg.diff_ref)
-            if (cfg.diff_ref and not resolved.is_file())
-            else None
+            get_git_diff_added_lines(repo_root, staged=True)
+            if staged_mode
+            else (
+                get_git_diff_added_lines(repo_root, base_ref=cfg.diff_ref)
+                if (cfg.diff_ref and not resolved.is_file())
+                else None
+            )
         )
 
         # 1. Secret detection (3-Stage Hybrid Pipeline)
         secret_scanner = SecretScanner(cfg)
         if diff_added_map is not None:
-            secret_outcome = secret_scanner.scan_diff_lines(repo_root, diff_added_map, staged=False)
+            secret_outcome = secret_scanner.scan_diff_lines(repo_root, diff_added_map, staged=staged_mode)
         else:
             secret_outcome = secret_scanner.scan_directory(resolved)
         head_hashes = {f.raw_hash for f in secret_outcome.findings}

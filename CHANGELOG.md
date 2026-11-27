@@ -5,6 +5,9 @@ All notable changes to **OpenGuard (开源卫士)** are documented in this file 
 ## [Unreleased]
 
 ### Fixed & Hardened
+- **`--staged` 暂存区增量审计生效修复与 HTML 报告分类标签完善（Round #31）**：
+  - 修复 `OpenGuardAuditor._audit_local_path()` 未消费 `cfg.staged_only` 导致 `openguard scan . --staged`（含 `pre-commit` 钩子）全量扫描工作区而非仅拦截暂存区变更的核心缺陷；
+  - 为 `SecretScanner.scan_diff_lines()` 的 `git show` 补充 15 秒超时保护，并在 `html_reporter.py` 补全 `OG-ML-`（`ML 模型安全`）与 `OG-HYG-`（`敏感产物卫生`）分类徽章。
 - **Git 历史幽灵密钥中文路径解析与超时保护、`.gitignore` 模板完善（Round #30）**：
   - 修复 `GitHistoryScanner.scan_history()` 缺少 `-c core.quotepath=false` 导致中文历史文件名被转义及 `+++ /dev/null` 未重置 `current_file` 的问题，并补充 60 秒子进程超时与异常兜底；
   - 完善 `DocGenerator.GITIGNORE_TEMPLATE` 覆盖 `.pypirc`、`.netrc`、`*.jks`、`*.keystore`、`*.ppk`、`*.ovpn`。
