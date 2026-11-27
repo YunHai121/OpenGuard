@@ -5,6 +5,9 @@ All notable changes to **OpenGuard (开源卫士)** are documented in this file 
 ## [Unreleased]
 
 ### Fixed & Hardened
+- **Git 历史幽灵密钥中文路径解析与超时保护、`.gitignore` 模板完善（Round #30）**：
+  - 修复 `GitHistoryScanner.scan_history()` 缺少 `-c core.quotepath=false` 导致中文历史文件名被转义及 `+++ /dev/null` 未重置 `current_file` 的问题，并补充 60 秒子进程超时与异常兜底；
+  - 完善 `DocGenerator.GITIGNORE_TEMPLATE` 覆盖 `.pypirc`、`.netrc`、`*.jks`、`*.keystore`、`*.ppk`、`*.ovpn`。
 - **增量缓存中文路径编码崩溃修复与 `.mjs`/`.cjs` SAST 扩展（Round #29）**：
   - 修复 `scan_cache.compute_file_cache_key()` 使用 `.encode("ascii")` 导致开启 `--cache` 扫描含中文/Unicode 文件名仓库时抛出 `UnicodeEncodeError` 的崩溃缺陷（改为 UTF-8）；
   - 扩展 `CodeSecurityScanner` 覆盖 `.mjs` 与 `.cjs` 现代 Node.js 模块的 SAST 与跨语句污点扫描。

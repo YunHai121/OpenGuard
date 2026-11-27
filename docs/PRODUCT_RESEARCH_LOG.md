@@ -572,3 +572,15 @@
 ### 验证结果
 - 新增 `tests/test_v39_cache_unicode_and_mjs_sast.py`（1 项端到端回归测试），全量单测增至 **147 / 147 通过**；
 - `node --check openguard/web/static/app.js`、自身审计 **100.0/100 (A+)**（**Quality Gate: PASSED**）、`openguard compliance . --offline --fail-on-noncompliant`（**8/8 COMPLIANT**）与 `openguard doctor .` 全部通过。
+
+---
+
+## Round #30 — 2026-11-27 21:28–21:35
+
+### 本轮重点（Git 历史中文路径/超时加固 + `.gitignore` 模板闭环）
+1. **`GitHistoryScanner.scan_history()` 加固 (`scanners/git_history_scanner.py`)**：加入 `-c core.quotepath=false`、`diff --git`/`+++ /dev/null` 状态重置及 60s 超时异常处理。
+2. **`.gitignore` 生成模板补全 (`remediation/doc_generator.py`)**：与 `OG-HYG-001` 对齐，新增 `.pypirc`、`.netrc`、`*.jks`、`*.keystore`、`*.ppk`、`*.ovpn`。
+
+### 验证结果
+- 新增 `tests/test_v40_git_history_quotepath_and_docgen.py`（2 项回归测试），全量单测增至 **149 / 149 通过**；
+- `node --check openguard/web/static/app.js`、自身审计 **100.0/100 (A+)**（**Quality Gate: PASSED**）、`openguard compliance . --offline --fail-on-noncompliant`（**8/8 COMPLIANT**）与 `openguard doctor .` 全部通过。

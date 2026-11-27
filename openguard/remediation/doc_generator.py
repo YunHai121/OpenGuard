@@ -117,6 +117,12 @@ GITIGNORE_TEMPLATE = """# Sensitive credentials & keys (OpenGuard Recommended)
 *.key
 *.p12
 *.pfx
+*.jks
+*.keystore
+*.ppk
+*.ovpn
+.pypirc
+.netrc
 *secret*.json
 .openguard_backup/
 

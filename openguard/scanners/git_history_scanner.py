@@ -65,6 +65,8 @@ class GitHistoryScanner:
 
         cmd = [
             "git",
+            "-c",
+            "core.quotepath=false",
             "log",
             f"-n{self.config.max_git_commits}",
             "--no-merges",
@@ -73,14 +75,18 @@ class GitHistoryScanner:
             "-p",
             "-U0",
         ]
-        res = subprocess.run(
-            cmd,
-            cwd=str(repo_path),
-            capture_output=True,
-            text=True,
-            encoding="utf-8",
-            errors="replace",
-        )
+        try:
+            res = subprocess.run(
+                cmd,
+                cwd=str(repo_path),
+                capture_output=True,
+                text=True,
+                encoding="utf-8",
+                errors="replace",
+                timeout=60,
+            )
+        except Exception:
+            return []
         if res.returncode != 0 or not res.stdout:
             return []
 
@@ -101,6 +107,10 @@ class GitHistoryScanner:
                     commit_hash, commit_author, commit_date = meta[0][:10], meta[1], meta[2]
                 current_file = ""
                 current_line = 0
+                continue
+
+            if raw_line.startswith("diff --git ") or raw_line.startswith("+++ /dev/null"):
+                current_file = ""
                 continue
 
             if raw_line.startswith("+++ b/"):
