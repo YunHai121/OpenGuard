@@ -524,3 +524,15 @@
 ### 验证结果
 - 新增 `tests/test_v35_vuln_typosquat_pep503_and_dep_guard.py`（2 项回归测试），全量单测增至 **140 / 140 通过**；
 - `node --check openguard/web/static/app.js`、自身审计 **100.0/100 (A+)**（**Quality Gate: PASSED**）、`openguard compliance . --offline --fail-on-noncompliant`（**8/8 COMPLIANT**）与 `openguard doctor .` 全部通过。
+
+---
+
+## Round #26 — 2026-11-27 17:28–17:35
+
+### 本轮重点（Git Diff 中文/删除文件修复 + 多仓批量审计配置继承）
+1. **`baseline.get_git_diff_added_lines()` 边界修复 (`baseline.py`)**：加入 `diff --git` 与 `+++ /dev/null` 状态重置，防止删除文件污染后续文件行号统计，并启用 `git -c core.quotepath=false` 原生支持中文/Unicode 路径。
+2. **多仓组合审计配置完整继承 (`portfolio.py`)**：`PortfolioAuditor` 改为通过 `load_config()` 加载各子仓库 `.openguard.yml`。
+
+### 验证结果
+- 新增 `tests/test_v36_baseline_diff_and_portfolio_cfg.py`（2 项回归测试），全量单测增至 **142 / 142 通过**；
+- `node --check openguard/web/static/app.js`、自身审计 **100.0/100 (A+)**（**Quality Gate: PASSED**）、`openguard compliance . --offline --fail-on-noncompliant`（**8/8 COMPLIANT**）与 `openguard doctor .` 全部通过。

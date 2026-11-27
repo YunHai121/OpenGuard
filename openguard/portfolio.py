@@ -14,7 +14,7 @@ from pathlib import Path
 from typing import Any, Dict, List, Optional
 
 from openguard.auditor import OpenGuardAuditor
-from openguard.config import AuditConfig, DEFAULT_EXCLUDE_DIRS
+from openguard.config import AuditConfig, DEFAULT_EXCLUDE_DIRS, load_config
 
 REPO_MARKER_FILES = (
     ".git",
@@ -125,7 +125,10 @@ class PortfolioAuditor:
 
         try:
             for rpath in repo_paths:
-                cfg = AuditConfig(offline=offline, use_cache=use_cache)
+                rp = Path(rpath)
+                cfg = load_config(rp if rp.is_dir() else rp.parent) if rp.exists() else AuditConfig()
+                cfg.offline = offline
+                cfg.use_cache = use_cache
                 try:
                     rep = OpenGuardAuditor(cfg).audit(rpath)
                     qg = rep.summary.quality_gate.status if rep.summary.quality_gate else "N/A"

@@ -5,6 +5,9 @@ All notable changes to **OpenGuard (开源卫士)** are documented in this file 
 ## [Unreleased]
 
 ### Fixed & Hardened
+- **Git Diff 增量行号解析与多仓批量审计配置继承修复（Round #26）**：
+  - 修复 `baseline.get_git_diff_added_lines()` 在遇到已删除文件（`+++ /dev/null`）未重置 `current_file` 及 Windows 下中文路径八进制转义（补充 `-c core.quotepath=false`）的缺陷；
+  - 修复 `PortfolioAuditor.audit_repositories()` 未加载各子仓库 `.openguard.yml` 完整配置（权重/阈值/策略）的问题。
 - **PyPI PEP 503 仿冒误报消除、OSV 分批查询与依赖修复路径防穿越（Round #25）**：
   - 修复 `VulnScanner` 对 PyPI 等价命名（如 `python_dotenv` vs `python-dotenv`）误报为 1-编辑距离 Typosquatting 的问题，并将在线 `OSV.dev` 批量查询升级为按 60 组件自动分块遍历，避免大仓截断；
   - 为 `DependencyRemediator` 补充 `fpath.is_relative_to(root)` 路径穿越防护。

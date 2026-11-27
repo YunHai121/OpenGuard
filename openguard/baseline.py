@@ -150,7 +150,7 @@ def get_git_diff_added_lines(
     base_ref: Optional[str] = None,
 ) -> Dict[str, Set[int]]:
     """Return `{posix_rel_path: {added_1based_line_numbers}}` from `git diff`."""
-    cmd = ["git", "diff", "-U0", "--no-color"]
+    cmd = ["git", "-c", "core.quotepath=false", "diff", "-U0", "--no-color"]
     if staged:
         cmd.append("--cached")
     elif base_ref:
@@ -175,7 +175,7 @@ def get_git_diff_added_lines(
     if res.returncode != 0 and base_ref and not staged:
         try:
             res = subprocess.run(
-                ["git", "diff", "-U0", "--no-color", base_ref],
+                ["git", "-c", "core.quotepath=false", "diff", "-U0", "--no-color", base_ref],
                 cwd=str(repo_root),
                 capture_output=True,
                 text=True,
@@ -193,7 +193,11 @@ def get_git_diff_added_lines(
     current_file = ""
     current_line = 0
     for raw_line in res.stdout.splitlines():
-        if raw_line.startswith("+++ b/"):
+        if raw_line.startswith("diff --git "):
+            current_file = ""
+        elif raw_line.startswith("+++ /dev/null"):
+            current_file = ""
+        elif raw_line.startswith("+++ b/"):
             current_file = raw_line[6:].strip()
         elif raw_line.startswith("@@ "):
             m = re.search(r"\+(\d+)", raw_line)
