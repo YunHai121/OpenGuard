@@ -67,7 +67,7 @@ class CodeSecurityScanner:
                 if is_path_excluded(rel, self.config.exclude_patterns):
                     continue
                 if fpath.suffix.lower() in (
-                    ".py", ".js", ".ts", ".jsx", ".tsx", ".sh", ".go",
+                    ".py", ".js", ".ts", ".jsx", ".tsx", ".mjs", ".cjs", ".sh", ".go",
                     ".java", ".c", ".cc", ".cpp", ".cxx", ".h", ".hpp", ".rs",
                 ):
                     target_files.append(fpath)
@@ -121,7 +121,7 @@ class CodeSecurityScanner:
         ext = Path(file_path).suffix.lower()
         if ext == ".py":
             return self._scan_python_ast(content, file_path)
-        if ext in (".js", ".ts", ".jsx", ".tsx"):
+        if ext in (".js", ".ts", ".jsx", ".tsx", ".mjs", ".cjs"):
             return self._scan_js_patterns(content, file_path)
         if ext == ".sh":
             return self._scan_shell_patterns(content, file_path)

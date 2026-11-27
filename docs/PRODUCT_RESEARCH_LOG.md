@@ -560,3 +560,15 @@
 ### 验证结果
 - 新增 `tests/test_v38_loc_counter_docstrings.py`（2 项回归测试），全量单测增至 **146 / 146 通过**；
 - `node --check openguard/web/static/app.js`、自身审计 **100.0/100 (A+)**（**Quality Gate: PASSED**）、`openguard compliance . --offline --fail-on-noncompliant`（**8/8 COMPLIANT**）与 `openguard doctor .` 全部通过。
+
+---
+
+## Round #29 — 2026-11-27 20:28–20:35
+
+### 本轮重点（增量缓存 Unicode 崩溃修复 + `.mjs`/`.cjs` 模块 SAST 覆盖）
+1. **增量缓存 Unicode 崩溃修复 (`utils/scan_cache.py`)**：将 `compute_file_cache_key()` 中的 `.encode("ascii")` 修复为 `.encode("utf-8", errors="replace")`，彻底消除 `--cache` 模式遇到中文路径时的 `UnicodeEncodeError`。
+2. **现代 JS 模块扩展 (`scanners/code_security_scanner.py`)**：纳入 `.mjs` 与 `.cjs` 文件的 SAST 与污点追踪扫描。
+
+### 验证结果
+- 新增 `tests/test_v39_cache_unicode_and_mjs_sast.py`（1 项端到端回归测试），全量单测增至 **147 / 147 通过**；
+- `node --check openguard/web/static/app.js`、自身审计 **100.0/100 (A+)**（**Quality Gate: PASSED**）、`openguard compliance . --offline --fail-on-noncompliant`（**8/8 COMPLIANT**）与 `openguard doctor .` 全部通过。

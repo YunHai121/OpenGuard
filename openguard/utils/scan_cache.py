@@ -32,9 +32,9 @@ def compute_config_fingerprint(config: AuditConfig) -> str:
 
 def compute_file_cache_key(raw_bytes: bytes, config_fp: str, scanner_ns: str) -> str:
     h = hashlib.sha256()
-    h.update(scanner_ns.encode("ascii"))
+    h.update(scanner_ns.encode("utf-8", errors="replace"))
     h.update(b"|")
-    h.update(config_fp.encode("ascii"))
+    h.update(config_fp.encode("utf-8", errors="replace"))
     h.update(b"|")
     h.update(raw_bytes)
     return h.hexdigest()[:32]

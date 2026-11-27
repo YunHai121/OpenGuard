@@ -5,6 +5,9 @@ All notable changes to **OpenGuard (开源卫士)** are documented in this file 
 ## [Unreleased]
 
 ### Fixed & Hardened
+- **增量缓存中文路径编码崩溃修复与 `.mjs`/`.cjs` SAST 扩展（Round #29）**：
+  - 修复 `scan_cache.compute_file_cache_key()` 使用 `.encode("ascii")` 导致开启 `--cache` 扫描含中文/Unicode 文件名仓库时抛出 `UnicodeEncodeError` 的崩溃缺陷（改为 UTF-8）；
+  - 扩展 `CodeSecurityScanner` 覆盖 `.mjs` 与 `.cjs` 现代 Node.js 模块的 SAST 与跨语句污点扫描。
 - **`openguard cloc` Python 三引号文档字符串与 `.github` 目录统计修复（Round #28）**：
   - 修复 `loc_counter.count_file_loc()` 因 `("'''", '"""')` 起始/结束符判定逻辑缺陷导致 `"""..."""` 文档字符串未计入注释行及 `'''...'''` 多行文档字符串无法闭合的统计错误；
   - 修复 `count_repository_loc()` 使用 `not d.startswith(".git")` 误跳过 `.github/workflows` 的问题（改为精确排除 `.git`）。
