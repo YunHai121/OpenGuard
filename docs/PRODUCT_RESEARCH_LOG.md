@@ -638,3 +638,19 @@
 - 新增 `tests/test_v42_ai_config_mcp_paths.py`（3 项回归测试），全量单测增至 **154 / 154 通过**；
 - `node --check openguard/web/static/app.js` 零语法错误；
 - 自身审计：**100.0/100 (A+)**，合规映射 **COMPLIANT (8/8 · 100.0%)**，`openguard doctor .` `ERROR=0`。
+
+---
+
+## Round #35 — 2026-11-29 00:35–00:42
+
+### 核心修复与优化
+1. **JS/TS 污点分析守卫作用域隔离与精确路径校验修复（`openguard/scanners/js_taint_analyzer.py`）**：
+   - 修复 `path_guarded` / `proto_guarded` 布尔守卫在整份文件中单向保持为 `True`、导致前一个路由的安全校验误屏蔽后续路由漏洞的漏报问题，新增 `JS_SCOPE_BOUNDARY_RE` 在路由/函数边界自动重置局部污点与守卫状态；
+   - 修复通用 `startsWith(`（如 `url.startsWith("https://")`）误判为路径边界防护的问题，收紧为 `path.relative(` 或路径边界变量前缀校验（`JS_PATH_GUARD_STARTSWITH_RE`）。
+2. **Python AST 污点分析关键字参数覆盖补全（`openguard/scanners/taint_analyzer.py`）**：
+   - 修复 `CMD_SINKS`（`subprocess.run(args=cmd, shell=True)`）与 `PATH_SINKS`（`open(file=fpath)` / `send_file(path_or_file=...)`）使用关键字参数传参时因 `node.args` 为空被跳过的漏报缺陷。
+
+### 验证结果
+- 新增 `tests/test_v43_taint_scope_and_kwargs.py`（2 项回归测试），全量单测增至 **156 / 156 通过**；
+- `node --check openguard/web/static/app.js` 零语法错误；
+- 自身审计：**100.0/100 (A+)**，合规映射 **COMPLIANT (8/8 · 100.0%)**，`openguard doctor .` `ERROR=0`。

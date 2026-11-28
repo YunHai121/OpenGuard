@@ -39,6 +39,14 @@ JS_PATH_SINK_RE = re.compile(
     r"\bfs\.(?:readFile|readFileSync|writeFile|writeFileSync|createReadStream|unlink|rm)\s*\(([^,)]+)"
 )
 JS_PROTO_POLLUTE_RE = re.compile(r"([A-Za-z_$][A-Za-z0-9_$]*)\s*\[\s*([A-Za-z_$][A-Za-z0-9_$]*)\s*\]\s*=")
+JS_SCOPE_BOUNDARY_RE = re.compile(
+    r"^\s*(?:export\s+(?:default\s+)?)?(?:async\s+)?function\s+[A-Za-z_$]|"
+    r"^\s*(?:app|router)\.(?:get|post|put|delete|patch|use|all)\s*\("
+)
+JS_PATH_GUARD_STARTSWITH_RE = re.compile(
+    r"(?i)(?:resolved|safe|real|target|file|full|abs|candidate)[A-Za-z0-9_$]*\.startsWith\s*\(|"
+    r"\.startsWith\s*\(\s*(?:base|root|safe|upload|dir|allowed)[A-Za-z0-9_$]*\b"
+)
 
 
 class JSTaintAnalyzer:
@@ -57,8 +65,14 @@ class JSTaintAnalyzer:
             if not stripped or stripped.startswith(("//", "/*", "*")) or "openguard: ignore" in stripped.lower():
                 continue
 
+            # Reset intraprocedural guards & local taint at new route/function boundaries
+            if JS_SCOPE_BOUNDARY_RE.match(raw):
+                tainted = {}
+                path_guarded = False
+                proto_guarded = False
+
             # Detect path traversal / prototype pollution guards in surrounding block
-            if "startsWith(" in raw or "path.relative(" in raw:
+            if "path.relative(" in raw or JS_PATH_GUARD_STARTSWITH_RE.search(raw):
                 path_guarded = True
             if "__proto__" in raw and ("continue" in raw or "return" in raw or "throw" in raw or "!==" in raw):
                 proto_guarded = True

@@ -324,13 +324,17 @@ class PythonTaintAnalyzer:
                         )
 
                 # 2. Command Injection Sink: os.system / subprocess(..., shell=True) with tainted arg
-                elif call_name in CMD_SINKS and node.args:
+                elif call_name in CMD_SINKS:
+                    cmd_arg = node.args[0] if node.args else next(
+                        (kw.value for kw in node.keywords if kw.arg == "args"),
+                        None,
+                    )
                     is_shell = call_name in ("os.system", "os.popen") or any(
                         kw.arg == "shell" and isinstance(kw.value, ast.Constant) and kw.value.value is True
                         for kw in node.keywords
                     )
-                    if is_shell:
-                        origin = _expr_taint_origin(node.args[0], tainted_vars)
+                    if cmd_arg is not None and is_shell:
+                        origin = _expr_taint_origin(cmd_arg, tainted_vars)
                         if origin and (ln, "CWE-78") not in seen:
                             seen.add((ln, "CWE-78"))
                             findings.append(
@@ -372,9 +376,13 @@ class PythonTaintAnalyzer:
                     call_name in PATH_SINKS
                     or call_name.endswith((".read_text", ".read_bytes", ".write_text", ".write_bytes"))
                 ):
-                    target_arg = node.args[0] if (call_name in PATH_SINKS and node.args) else (
-                        node.func.value if isinstance(node.func, ast.Attribute) else None
-                    )
+                    if call_name in PATH_SINKS:
+                        target_arg = node.args[0] if node.args else next(
+                            (kw.value for kw in node.keywords if kw.arg in ("file", "path", "path_or_file", "src")),
+                            None,
+                        )
+                    else:
+                        target_arg = node.func.value if isinstance(node.func, ast.Attribute) else None
                     origin = _expr_taint_origin(target_arg, tainted_vars)
                     if origin and (ln, "CWE-22") not in seen:
                         seen.add((ln, "CWE-22"))

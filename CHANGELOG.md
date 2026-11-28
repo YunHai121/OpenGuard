@@ -5,6 +5,9 @@ All notable changes to **OpenGuard (开源卫士)** are documented in this file 
 ## [Unreleased]
 
 ### Fixed & Hardened
+- **JS/Python 跨语句污点作用域隔离与关键字参数漏报修复（Round #35）**：
+  - 修复 `JSTaintAnalyzer` 中 `path_guarded` / `proto_guarded` 状态跨路由/函数泄漏及 `url.startsWith("https://")` 误抑制后续 `CWE-22` 目录穿越检测的漏报缺陷（改为在路由/函数边界重置状态，并要求路径边界前缀校验）；
+  - 修复 `PythonTaintAnalyzer` 对 `subprocess.run(args=..., shell=True)` 与 `open(file=...)` 等关键字参数传参漏报的问题。
 - **AI 规则与 MCP 配置跨平台/精确行号检测修复（Round #34）**：
   - 修复 `AIConfigSecurityScanner._scan_mcp_config()` 仅精确匹配 `"npx"`/`"uvx"`/`"bunx"` 导致 Windows 扩展名（`npx.cmd`、`bunx.exe`）或绝对路径（`/usr/local/bin/uvx`）未锁定版本启动器被漏报的问题；
   - 修复多服务 `.mcp.json` 中 `env` 硬编码凭据行号定位始终从第 1 行检索的问题（改为从当前服务起始行 `start_line=ln` 检索）；
