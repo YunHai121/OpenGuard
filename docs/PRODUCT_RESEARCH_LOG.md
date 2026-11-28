@@ -623,3 +623,18 @@
 ### 验证结果
 - `python -m unittest discover -s tests -v`：**151 / 151 通过**；
 - `node --check openguard/web/static/app.js`、自身审计 **100.0/100 (A+)**（**Quality Gate: PASSED**）、`openguard compliance . --offline --fail-on-noncompliant`（**8/8 COMPLIANT**）与 `openguard doctor .` 全部通过。
+
+---
+
+## Round #34 — 2026-11-28 12:56–13:02
+
+### 核心修复与优化
+1. **AI 规则与 MCP 配置跨平台/精确行号检测修复（`openguard/scanners/ai_config_scanner.py`）**：
+   - 归一化 MCP 启动器可执行文件名（剥离路径前缀与 `.cmd` / `.exe` / `.bat` 后缀），确保 Windows `npx.cmd`、`bunx.exe` 与 Unix 绝对路径 `/usr/local/bin/uvx` 的未锁版本远端拉取均被 `OG-AI-004` 精准拦截；
+   - 为 `_scan_mcp_config()` 的 `find_line(needle, start_line=ln)` 补充服务块起始行锚点，避免多服务 `.mcp.json` 中同名 `env` 键误报首个服务的行号；
+   - 扩展 `is_ai_rule_file()` 覆盖 `.windsurf/rules/` 与 `.clinerules/` 目录下的 AI 助手规则文件。
+
+### 验证结果
+- 新增 `tests/test_v42_ai_config_mcp_paths.py`（3 项回归测试），全量单测增至 **154 / 154 通过**；
+- `node --check openguard/web/static/app.js` 零语法错误；
+- 自身审计：**100.0/100 (A+)**，合规映射 **COMPLIANT (8/8 · 100.0%)**，`openguard doctor .` `ERROR=0`。

@@ -4,6 +4,12 @@ All notable changes to **OpenGuard (开源卫士)** are documented in this file 
 
 ## [Unreleased]
 
+### Fixed & Hardened
+- **AI 规则与 MCP 配置跨平台/精确行号检测修复（Round #34）**：
+  - 修复 `AIConfigSecurityScanner._scan_mcp_config()` 仅精确匹配 `"npx"`/`"uvx"`/`"bunx"` 导致 Windows 扩展名（`npx.cmd`、`bunx.exe`）或绝对路径（`/usr/local/bin/uvx`）未锁定版本启动器被漏报的问题；
+  - 修复多服务 `.mcp.json` 中 `env` 硬编码凭据行号定位始终从第 1 行检索的问题（改为从当前服务起始行 `start_line=ln` 检索）；
+  - 扩展 `is_ai_rule_file()` 覆盖 `.windsurf/rules/` 与 `.clinerules/` 规则目录。
+
 ### Improved
 - **Markdown 审计报告合规证据列补齐与 260 样本基准复测（Round #33）**：在 `render_markdown_report()` 第 9 节合规映射摘要表补充`审计证据`列，并复测 260 样本基准保持 `Precision 1.0000 / Recall 1.0000 / F1 1.0000 / FPR 0.0000`。
 

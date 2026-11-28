@@ -117,6 +117,10 @@ class AIConfigSecurityScanner:
             return True
         if ".cursor/rules/" in low or low.startswith(".cursor/rules/"):
             return True
+        if ".windsurf/rules/" in low or low.startswith(".windsurf/rules/"):
+            return True
+        if ".clinerules/" in low or low.startswith(".clinerules/"):
+            return True
         if ".github/instructions/" in low or low.startswith(".github/instructions/"):
             return True
         return False
@@ -287,7 +291,10 @@ class AIConfigSecurityScanner:
         findings: List[CodeSecurityFinding] = []
         lines = content.splitlines()
 
-        def find_line(needle: str) -> int:
+        def find_line(needle: str, start_line: int = 1) -> int:
+            for idx in range(max(1, start_line), len(lines) + 1):
+                if needle in lines[idx - 1]:
+                    return idx
             for idx, ln in enumerate(lines, start=1):
                 if needle in ln:
                     return idx
@@ -318,8 +325,12 @@ class AIConfigSecurityScanner:
                 )
 
             # 4b. Unpinned `npx -y <pkg>` or `uvx <pkg>` auto-download without version pin
-            cmd_low = cmd.lower()
-            if cmd_low in ("npx", "uvx", "bunx"):
+            cmd_name = cmd.strip().replace("\\", "/").rsplit("/", 1)[-1].lower()
+            for ext in (".cmd", ".exe", ".bat"):
+                if cmd_name.endswith(ext):
+                    cmd_name = cmd_name[: -len(ext)]
+                    break
+            if cmd_name in ("npx", "uvx", "bunx"):
                 pkg_args = [str(a) for a in args if not str(a).startswith("-")]
                 if pkg_args:
                     pkg = pkg_args[0]
@@ -359,7 +370,7 @@ class AIConfigSecurityScanner:
                                     cwe_id="CWE-798",
                                     severity=Severity.HIGH,
                                     file_path=rel,
-                                    line_number=find_line(f'"{ek}"'),
+                                    line_number=find_line(f'"{ek}"', start_line=ln),
                                     snippet=f"{srv_name}.env.{ek}=****",
                                     description=f"MCP 配置 `{rel}` 中 `{srv_name}` 的 `env.{ek}` 硬编码了明文凭据。",
                                     remediation="改用 `${ENV_VAR}` 占位引用或系统密钥环注入，切勿将凭据提交至仓库 MCP 配置文件。",
