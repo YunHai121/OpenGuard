@@ -93,7 +93,13 @@ class DependencyParser:
             return comp
 
         for dirpath, dirnames, filenames in os.walk(root):
-            dirnames[:] = [d for d in sorted(dirnames) if d not in DEFAULT_EXCLUDE_DIRS]
+            rel_dir = Path(dirpath).resolve().relative_to(root).as_posix()
+            dirnames[:] = [
+                d
+                for d in sorted(dirnames)
+                if d not in DEFAULT_EXCLUDE_DIRS
+                and not is_path_excluded(f"{rel_dir}/{d}/" if rel_dir != "." else f"{d}/", excludes)
+            ]
             for fname in sorted(filenames):
                 fpath = Path(dirpath) / fname
                 rel = fpath.relative_to(root).as_posix()
@@ -167,7 +173,7 @@ class DependencyParser:
                 if not m:
                     continue
                 pkg = m.group(1)
-                ver = (m.group(3) or "unspecified").strip()
+                ver = (m.group(3) or "unspecified").split(",", 1)[0].strip() or "unspecified"
                 comp = upsert(
                     DependencyComponent(
                         name=pkg,
@@ -204,7 +210,7 @@ class DependencyParser:
                 if name.lower() == "python":
                     continue
                 ver = spec if isinstance(spec, str) else (spec.get("version", "") if isinstance(spec, dict) else "")
-                ver_clean = ver.lstrip("^~>=<! ") or "unspecified"
+                ver_clean = ver.split(",", 1)[0].strip().lstrip("^~>=<! ") or "unspecified"
                 comp = upsert(
                     DependencyComponent(
                         name=name,
@@ -223,7 +229,7 @@ class DependencyParser:
             if not m:
                 continue
             pkg = m.group(1)
-            ver = (m.group(3) or "unspecified").strip()
+            ver = (m.group(3) or "unspecified").split(",", 1)[0].strip() or "unspecified"
             comp = upsert(
                 DependencyComponent(
                     name=pkg,
@@ -269,7 +275,11 @@ class DependencyParser:
                     continue
                 name = pkg_path.split("node_modules/")[-1]
                 ver = str(info.get("version", "unspecified"))
-                lic = str(info.get("license", "UNKNOWN"))
+                raw_lic = info.get("license", "UNKNOWN")
+                if isinstance(raw_lic, dict):
+                    lic = str(raw_lic.get("type") or raw_lic.get("name") or "UNKNOWN")
+                else:
+                    lic = str(raw_lic or "UNKNOWN")
                 comp = upsert(
                     DependencyComponent(
                         name=name,

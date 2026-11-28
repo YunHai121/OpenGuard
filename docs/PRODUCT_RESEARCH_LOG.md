@@ -654,3 +654,18 @@
 - 新增 `tests/test_v43_taint_scope_and_kwargs.py`（2 项回归测试），全量单测增至 **156 / 156 通过**；
 - `node --check openguard/web/static/app.js` 零语法错误；
 - 自身审计：**100.0/100 (A+)**，合规映射 **COMPLIANT (8/8 · 100.0%)**，`openguard doctor .` `ERROR=0`。
+
+---
+
+## Round #36 — 2026-11-29 01:35–01:41
+
+### 核心修复与优化
+1. **多生态依赖解析边界与性能加固（`openguard/scanners/dependency_parser.py`）**：
+   - 在 `parse_repository()` 的 `os.walk()` 目录遍历中补充 `is_path_excluded(..., excludes)` 提前剪枝，避免扫描大型被排除目录；
+   - 修复 `_parse_pyproject_toml()` 解析 `[tool.poetry.dependencies]`（如 `">=0.27.0, <1.0"`）与 `_parse_requirements_txt()` 复合版本约束时保留逗号上限片段导致 PURL（`pkg:pypi/...`）和离线 CVE 版本匹配异常的缺陷；
+   - 兼容 `package-lock.json` 中 `license` 为 `{"type": "MIT"}` 字典对象时的精确 SPDX 名称提取。
+
+### 验证结果
+- 新增 `tests/test_v44_dep_parser_excludes_and_versions.py`（1 项回归测试），全量单测增至 **157 / 157 通过**；
+- `node --check openguard/web/static/app.js` 零语法错误；
+- 自身审计：**100.0/100 (A+)**，合规映射 **COMPLIANT (8/8 · 100.0%)**，`openguard doctor .` `ERROR=0`。

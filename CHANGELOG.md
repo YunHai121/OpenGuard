@@ -5,6 +5,10 @@ All notable changes to **OpenGuard (开源卫士)** are documented in this file 
 ## [Unreleased]
 
 ### Fixed & Hardened
+- **依赖解析目录剪枝、复合版本约束截断与 npm 字典型许可证兼容修复（Round #36）**：
+  - 修复 `DependencyParser.parse_repository()` 遍历目录时未按 `exclude_patterns` 提前剪枝子目录的性能与排除缺陷；
+  - 修复 `_parse_pyproject_toml()` 解析 `[tool.poetry.dependencies]` 复合版本约束（如 `">=0.27.0, <1.0"`）时保留 `,` 后半段导致 PURL 与 CVE 版本比对失真的问题；
+  - 兼容 `package-lock.json` 中 `{"type": "MIT"}` 字典格式的 `license` 字段提取。
 - **JS/Python 跨语句污点作用域隔离与关键字参数漏报修复（Round #35）**：
   - 修复 `JSTaintAnalyzer` 中 `path_guarded` / `proto_guarded` 状态跨路由/函数泄漏及 `url.startsWith("https://")` 误抑制后续 `CWE-22` 目录穿越检测的漏报缺陷（改为在路由/函数边界重置状态，并要求路径边界前缀校验）；
   - 修复 `PythonTaintAnalyzer` 对 `subprocess.run(args=..., shell=True)` 与 `open(file=...)` 等关键字参数传参漏报的问题。
