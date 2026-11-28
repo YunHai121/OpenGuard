@@ -611,3 +611,15 @@
 ### 验证结果
 - `python -m unittest discover -s tests -v`：**151 / 151 通过**；
 - `node --check openguard/web/static/app.js`、`openguard scan . --offline --fail-on high`（**100.0/100 (A+)**, **Quality Gate: PASSED**）、`openguard compliance . --offline --fail-on-noncompliant`（**8/8 COMPLIANT**）、`openguard doctor .`（`v1.5.0`, `ERROR=0`）与 `python examples/third_party_ci_integration.py` 全部通过。
+
+---
+
+## Round #33 — 2026-11-28 00:29–00:35
+
+### 本轮重点（Markdown 合规证据列补全 + 260 样本基准与全链路回归）
+1. **Markdown 报告合规证据对齐 (`reporters/markdown_reporter.py`)**：在第 9 节 EU CRA / NIST SSDF / OWASP SCVS 摘要表中补齐 `审计证据` 列，与 PDF / Web 面板信息密度一致。
+2. **260 样本基准复测 (`benchmarks/run_benchmark.py`)**：实测三阶混合引擎保持 `Precision 1.0000 / Recall 1.0000 / F1 1.0000 / FPR 0.0000`（`57.56 ms`，相比纯正则基线误报率降低 `100.0%`）。
+
+### 验证结果
+- `python -m unittest discover -s tests -v`：**151 / 151 通过**；
+- `node --check openguard/web/static/app.js`、自身审计 **100.0/100 (A+)**（**Quality Gate: PASSED**）、`openguard compliance . --offline --fail-on-noncompliant`（**8/8 COMPLIANT**）与 `openguard doctor .` 全部通过。

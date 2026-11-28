@@ -4,6 +4,9 @@ All notable changes to **OpenGuard (开源卫士)** are documented in this file 
 
 ## [Unreleased]
 
+### Improved
+- **Markdown 审计报告合规证据列补齐与 260 样本基准复测（Round #33）**：在 `render_markdown_report()` 第 9 节合规映射摘要表补充`审计证据`列，并复测 260 样本基准保持 `Precision 1.0000 / Recall 1.0000 / F1 1.0000 / FPR 0.0000`。
+
 ## [1.5.0] - 2026-11-27
 
 ### Fixed & Hardened

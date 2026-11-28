@@ -14,8 +14,8 @@
       "recall": 1.0,
       "f1_score": 0.7164,
       "false_positive_rate": 0.6786,
-      "latency_ms": 31.59,
-      "throughput_loc_per_sec": 11713.3,
+      "latency_ms": 33.22,
+      "throughput_loc_per_sec": 11137.0,
       "misclassified_samples": [
         {
           "id": "TN-PH-0",
@@ -80,8 +80,8 @@
       "recall": 0.6167,
       "f1_score": 0.5286,
       "false_positive_rate": 0.6143,
-      "latency_ms": 4.4,
-      "throughput_loc_per_sec": 84171.3,
+      "latency_ms": 4.82,
+      "throughput_loc_per_sec": 76709.4,
       "misclassified_samples": [
         {
           "id": "TP-AWS-1",
@@ -146,8 +146,8 @@
       "recall": 1.0,
       "f1_score": 1.0,
       "false_positive_rate": 0.0,
-      "latency_ms": 54.54,
-      "throughput_loc_per_sec": 6784.5,
+      "latency_ms": 57.56,
+      "throughput_loc_per_sec": 6428.1,
       "misclassified_samples": []
     }
   ],
@@ -162,6 +162,6 @@
     ],
     "license_conflicts_detected": 3,
     "vulnerabilities_and_typosquats_detected": 14,
-    "elapsed_ms": 417.85
+    "elapsed_ms": 777.39
   }
 }

@@ -127,12 +127,12 @@ def render_markdown_report(report: AuditReport) -> str:
         f"达标率 **{comp['compliance_rate']:.1f}%**) | "
         f"**NTIA SBOM 质量分**: `{comp['sbom_quality_score']:.2f}/10.0 ({comp['sbom_quality_grade']})`",
         "",
-        "| 控制编号 | 合规控制项 | EU CRA | NIST SSDF | OWASP SCVS | 状态 |",
-        "| :--- | :--- | :--- | :--- | :--- | :---: |",
+        "| 控制编号 | 合规控制项 | EU CRA | NIST SSDF | OWASP SCVS | 状态 | 审计证据 |",
+        "| :--- | :--- | :--- | :--- | :--- | :---: | :--- |",
     ])
     for c in comp["controls"]:
         lines.append(
-            f"| `{c['id']}` | {c['name']} | {c['eu_cra']} | {c['nist_ssdf']} | {c['owasp_scvs']} | **{'PASS' if c['passed'] else 'FAIL'}** |"
+            f"| `{c['id']}` | {c['name']} | {c['eu_cra']} | {c['nist_ssdf']} | {c['owasp_scvs']} | **{'PASS' if c['passed'] else 'FAIL'}** | {c['evidence']} |"
         )
 
     lines.append("")
